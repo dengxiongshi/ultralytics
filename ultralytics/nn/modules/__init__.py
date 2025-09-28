@@ -88,9 +88,19 @@ from .transformer import (
     TransformerLayer,
 )
 
+
+from .CoreV8.SPPF.SimSPPF import SimSPPF
+from .GSConv import GSConv
+# from .V12.flashattention.A2C2F import A2C2f
+
 __all__ = (
     "Conv",
     "Conv2",
+
+    "SimSPPF",
+    "GSConv",
+    # "A2C2f",
+
     "LightConv",
     "RepConv",
     "DWConv",

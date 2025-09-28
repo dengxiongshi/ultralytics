@@ -8,3 +8,5 @@ numpy
 
 onnx  # ONNX export
 onnx-simplifier>=0.4.1  # ONNX simplifier
+
+thop

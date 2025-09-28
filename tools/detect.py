@@ -3,7 +3,6 @@ import platform
 import os
 from pathlib import Path
 
-
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[1]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
@@ -19,15 +18,17 @@ from ultralytics.nn.tasks import DetectionModel
 
 from ultralytics import YOLO
 
-
-
-weight = "/data/ultralytics/runs/train/detect/coco/yolo11s/weights/best.onnx"
-source = "/data/yolov5/data/images/bus.jpg"
+weight = ROOT / "weights/yolo11x.pt"
+source = r"C:\Users\dengxs\Desktop\test1\test\1.mp4"
+imgsz = 640
 device = 0
-project = "/data/ultralytics/runs/detect/detect/coco"
-name = "yolo11s"
+project = r"C:\Users\dengxs\Desktop\test1\test"
+name = "result"
+# save_dir = r"C:\Users\dengxs\Desktop\test1\test\result"
+conf = 0.45
+classes = [0, 2]
 
 model = YOLO(model=weight)
 
-results = model.predict(source=source, imgsz=[384, 640], device=device, save=True, project=project, name=name)
-
+results = model.predict(source=source, imgsz=imgsz, device=device, save=True,
+                        project=project, name=name, conf=conf, classes=classes)

@@ -24,21 +24,26 @@ from ultralytics import YOLO
 
 weight = "/data/ultralytics/weights/yolov8s.pt"
 cfg = "/data/ultralytics/models/yolov8s.yaml"
-datasets = "/determined/alluxio/public/dengxiongshi/datasets/person_car/20250115/person_car.yaml"
+datasets = "/determined/alluxio/public/dengxiongshi/datasets/person_car/20250211/person_car.yaml"
 epoch = 2000
-batch_size = 128
+batch_size = 144
 device = [0,1,2,3]
 project = "runs/train/detect/person_car"
-name = "yolov8s"
+name = "yolov8s_20250211"
 optimizer = "SGD"
-
-
-model = YOLO(model=cfg, task="detect", verbose=True)
-# model.info()
-model.load(weights=weight)
 
 # Add W&B callback for Ultralytics
 # add_wandb_callback(model, enable_model_checkpointing=True)
 
+
+model = YOLO(model=cfg, task="detect", verbose=True)
+model.load(weights=weight)
+
+
 results = model.train(data=datasets, epochs=epoch, patience=100, imgsz=640, batch=batch_size, device=device,
-                      project=project, name=name, optimizer=optimizer, lr0=0.01)
+                      project=project, name=name, optimizer=optimizer, lr0=0.01, resume=False)
+
+'''RESUME'''
+# weights = "/data/ultralytics/runs/train/detect/person_car/yolov8s_20250211/weights/last.pt"
+# model = YOLO(model=weights)
+# results = model.train(resume=True)

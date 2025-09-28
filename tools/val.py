@@ -3,7 +3,6 @@ import platform
 import os
 from pathlib import Path
 
-
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[1]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
@@ -19,24 +18,18 @@ from ultralytics.nn.tasks import DetectionModel
 
 from ultralytics import YOLO
 
-
-
-weight = "/data/ultralytics/weights/yolo11s.pt"
-cfg = "/data/ultralytics/weights/yolo11s.yaml"
-datasets = "/data/yolov5/datasets/coco128/coco.yaml"
-epoch = 600
+weight = "/data/ultralytics/runs/train/detect/person_car/yolov8s/weights/best.onnx"
+datasets = "/determined/alluxio/public/dengxiongshi/datasets/person_car/20250211/person_car.yaml"
 batch_size = 32
 device = 0
-project = "runs/train/detect/coco"
-name = "yolo11s"
-optimizer = "SGD"
-
+split = "test"  # Determines the dataset split to use for validation (val, test, or train)
+project = "runs/val/person_car"
+name = "yolov8s"
 
 model = YOLO(model=weight)
 
-results = model.val(data=datasets, imgsz=640, batch=batch_size, conf=0.001, iou=0.6, device=device,
-                      project=project, name=name)
+results = model.val(data=datasets, imgsz=640, batch=batch_size, conf=0.001, iou=0.6, device=device, split=split,
+                    project=project, name=name)
 
 # Evaluate model performance on the validation set
-metrics = model.val()
-
+# metrics = model.val()
