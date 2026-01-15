@@ -57,11 +57,11 @@ jobs:
         os: [ubuntu-latest]
         python: ["3.12"]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install requirements
         shell: bash # for Windows compatibility
         run: |
@@ -112,11 +112,11 @@ jobs:
         python: ["3.12"]
         model: [yolo11n]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install requirements
         shell: bash # for Windows compatibility
         run: |
@@ -178,11 +178,11 @@ jobs:
             torch: "1.8.0"
             torchvision: "0.9.0"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install requirements
         shell: bash # for Windows compatibility
         run: |
@@ -244,6 +244,10 @@ jobs:
             python: "3.10"
             torch: "1.13.0"
             torchvision: "0.14.0"
+          - os: ubuntu-latest # Axelera exports
+            python: "3.10"
+            torch: "2.8.0"
+            torchvision: "0.23.0"
           - os: ubuntu-latest
             python: "3.11"
             torch: "2.0.0"
@@ -277,11 +281,11 @@ jobs:
             torch: "2.7.0"
             torchvision: "0.22.0"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install requirements
         shell: bash # for Windows compatibility
         run: |
@@ -295,8 +299,12 @@ jobs:
           yolo checks
           uv pip list
       - name: Pytest tests
-        shell: bash # for Windows compatibility
-        run: pytest --slow --cov=ultralytics/ --cov-report=xml tests/
+        uses: ultralytics/actions/retry@main
+        with:
+          shell: bash # for Windows compatibility
+          run: pytest --slow --cov=ultralytics/ --cov-report=xml tests/
+          retries: 1 # Retry once after initial attempt (2 total runs)
+          retry_delay_seconds: 60
       - name: Prune uv Cache
         run: uv cache prune --ci
 
@@ -305,8 +313,8 @@ jobs:
     timeout-minutes: 60
     runs-on: gpu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           activate-environment: true
       - name: Install requirements
@@ -339,13 +347,15 @@ jobs:
     timeout-minutes: 120
     runs-on: raspberry-pi
     steps:
-      - uses: actions/checkout@v5
+      - name: Clean up runner
+        uses: eviden-actions/clean-self-hosted-runner@v1
+      - uses: actions/checkout@v6
       - name: Activate Virtual Environment for Tests
         run: |
           python3.11 -m venv env-tests
           source env-tests/bin/activate
           echo PATH=$PATH >> $GITHUB_ENV
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install requirements
         run: |
           uv pip install -e ".[export]" pytest mlflow faster-coco-eval --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match
@@ -413,8 +423,10 @@ jobs:
             torchvision_whl: "https://github.com/ultralytics/assets/releases/download/v0.0.0/torchvision-0.17.2+c1d70fe-cp38-cp38-linux_aarch64.whl"
             onnxruntime_whl: "https://github.com/ultralytics/assets/releases/download/v0.0.0/onnxruntime_gpu-1.16.3-cp38-cp38-linux_aarch64.whl"
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - name: Clean up runner
+        uses: eviden-actions/clean-self-hosted-runner@v1
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Activate virtual environment
         run: |
           python${{ matrix.python }} -m venv env --system-site-packages
@@ -448,7 +460,7 @@ jobs:
       run:
         shell: bash -el {0}
     steps:
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python }}
@@ -502,11 +514,11 @@ jobs:
 
   Summary:
     runs-on: ubuntu-latest
-    needs: [HUB, Benchmarks, Tests, GPU, RaspberryPi, NVIDIA_Jetson, Conda]
+    needs: [HUB, Benchmarks, Tests, SlowTests, GPU, RaspberryPi, NVIDIA_Jetson, Conda]
     if: always()
     steps:
       - name: Check for failure and notify
-        if: (needs.HUB.result == 'failure' || needs.Benchmarks.result == 'failure' || needs.Tests.result == 'failure' || needs.GPU.result == 'failure' || needs.RaspberryPi.result == 'failure' || needs.NVIDIA_Jetson.result == 'failure' || needs.Conda.result == 'failure' ) && github.repository == 'ultralytics/ultralytics' && (github.event_name == 'schedule' || github.event_name == 'push') && github.run_attempt == '1'
+        if: (needs.HUB.result == 'failure' || needs.Benchmarks.result == 'failure' || needs.Tests.result == 'failure' || needs.SlowTests.result == 'failure' || needs.GPU.result == 'failure' || needs.RaspberryPi.result == 'failure' || needs.NVIDIA_Jetson.result == 'failure' || needs.Conda.result == 'failure' ) && github.repository == 'ultralytics/ultralytics' && (github.event_name == 'schedule' || github.event_name == 'push') && github.run_attempt == '1'
         uses: slackapi/slack-github-action@v2.1.1
         with:
           webhook-type: incoming-webhook
