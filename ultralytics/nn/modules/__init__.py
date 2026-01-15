@@ -105,6 +105,8 @@ from .transformer import (
 
 from .CoreV8.SPPF.SimSPPF import SimSPPF
 from .GSConv import GSConv
+from .ShuffleNet import ShuffleNetV2, Conv_maxpool
+from .EfficientNetLite import MBConvBlock, stem
 # from .V12.flashattention.A2C2F import A2C2f
 
 __all__ = (
@@ -113,6 +115,10 @@ __all__ = (
 
     "SimSPPF",
     "GSConv",
+    "Conv_maxpool",
+    "ShuffleNetV2",
+    "stem",
+    "MBConvBlock",
     # "A2C2f",
 
     "LightConv",

@@ -11,7 +11,6 @@ if platform.system() != 'Windows':
     ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 import torch
-from ultralytics.utils.torch_utils import profile
 
 from ultralytics.engine.model import Model
 from ultralytics.nn.tasks import DetectionModel

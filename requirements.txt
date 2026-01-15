@@ -10,3 +10,7 @@ onnx  # ONNX export
 onnx-simplifier>=0.4.1  # ONNX simplifier
 
 thop
+polars
+onnxslim
+timm==0.9.10
+setuptools>=70.0.0
