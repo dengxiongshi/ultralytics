@@ -48,6 +48,8 @@ class SegmentationValidator(DetectionValidator):
         self.process = None
         self.args.task = "segment"
         self.metrics = SegmentMetrics()
+        self.use_miou = True
+        self.use_dice = True
 
     def preprocess(self, batch: dict[str, Any]) -> dict[str, Any]:
         """Preprocess batch of images for YOLO segmentation validation.
@@ -74,9 +76,13 @@ class SegmentationValidator(DetectionValidator):
         # More accurate vs faster
         self.process = ops.process_mask_native if self.args.save_json or self.args.save_txt else ops.process_mask
 
+        # reset mIoU and dice metrics
+        self.area = torch.zeros((2, self.nc), dtype=torch.float32, device=self.device)
+        self.dice_area = torch.zeros((2, self.nc), dtype=torch.float32, device=self.device)
+
     def get_desc(self) -> str:
         """Return a formatted description of evaluation metrics."""
-        return ("%22s" + "%11s" * 10) % (
+        columns = [
             "Class",
             "Images",
             "Instances",
@@ -87,8 +93,15 @@ class SegmentationValidator(DetectionValidator):
             "Mask(P",
             "R",
             "mAP50",
-            "mAP50-95)",
-        )
+            "mAP50-95",
+            "mIoU" if self.use_miou else ")",
+        ]
+        if self.use_dice:
+            if self.use_miou:
+                columns.append("Dice)")
+            else:
+                columns.append("Dice")
+        return ("%22s" + "%11s" * (len(columns) - 1)) % tuple(columns)
 
     def postprocess(self, preds: list[torch.Tensor]) -> list[dict[str, torch.Tensor]]:
         """Post-process YOLO predictions and return output detections with proto.
@@ -143,6 +156,13 @@ class SegmentationValidator(DetectionValidator):
         prepared_batch["masks"] = masks
         return prepared_batch
 
+    def get_stats(self) -> dict[str, Any]:
+        if self.use_miou:
+            self.metrics.iou = (self.area[0] / self.area[1]).tolist()
+        if self.use_dice:
+            self.metrics.dice = (self.dice_area[0] * 2 / self.dice_area[1]).tolist()
+        return super().get_stats()
+
     def _process_batch(self, preds: dict[str, torch.Tensor], batch: dict[str, Any]) -> dict[str, np.ndarray]:
         """Compute correct prediction matrix for a batch based on bounding boxes and optional masks.
 
@@ -169,8 +189,116 @@ class SegmentationValidator(DetectionValidator):
         else:
             iou = mask_iou(batch["masks"].flatten(1), preds["masks"].flatten(1).float())  # float, uint8
             tp_m = self.match_predictions(preds["cls"], gt_cls, iou).cpu().numpy()
+
+            if self.use_miou:
+                pred_cls = preds["cls"]
+                gt_masks = batch["masks"]
+                pred_masks = preds["masks"]
+                h, w = gt_masks.shape[1:]
+                gt_masks_cls = torch.full((h, w), 255, dtype=gt_masks.dtype, device=gt_masks.device)
+                pred_masks_cls = torch.full((h, w), 255, dtype=gt_masks.dtype, device=gt_masks.device)
+                for i, c in enumerate(gt_cls):
+                    gt_masks_cls[gt_masks[i].bool()] = c
+
+                for i, c in enumerate(pred_cls):
+                    if c not in gt_cls:
+                        continue
+                    pred_masks_cls[pred_masks[i].bool()] = c
+
+                mask = gt_masks_cls != 255
+                pred_masks_cls, gt_masks_cls = pred_masks_cls[mask], gt_masks_cls[mask]
+
+                inter = pred_masks_cls[pred_masks_cls == gt_masks_cls]
+                inter_area = torch.histc(inter, bins=self.nc, min=0, max=self.nc - 1) if len(inter) else 0
+                pred_area = torch.histc(pred_masks_cls, bins=self.nc, min=0, max=self.nc - 1)
+                gt_area = torch.histc(gt_masks_cls, bins=self.nc, min=0, max=self.nc - 1)
+                union_area = pred_area + gt_area
+                self.area[0] += inter_area
+                self.area[1] += union_area - inter_area
+
+                self.dice_area[0] += inter_area + 1e-7
+                self.dice_area[1] += union_area + 1e-7
+
         tp.update({"tp_m": tp_m})  # update tp with mask IoU
         return tp
+
+    def _mask_stats(self, pred_masks: torch.Tensor, gt_masks: torch.Tensor, eps: float = 1e-7, compute_dice: bool = True) -> tuple[float, float]:
+        """Compute mIoU and Dice coefficient for union masks in an image."""
+        pred_empty = pred_masks.numel() == 0
+        gt_empty = gt_masks.numel() == 0
+        if pred_empty and gt_empty:
+            return 1.0, 1.0
+
+        if pred_empty:
+            pred_union = torch.zeros_like(gt_masks[0], dtype=torch.bool)
+        else:
+            pred_union = pred_masks > 0.5
+            if pred_union.ndim == 3:
+                pred_union = pred_union.any(0)
+
+        if gt_empty:
+            gt_union = torch.zeros_like(pred_union, dtype=torch.bool)
+        else:
+            gt_union = gt_masks > 0.5
+            if gt_union.ndim == 3:
+                gt_union = gt_union.any(0)
+
+        intersection = (pred_union & gt_union).sum().float()
+        pred_sum = pred_union.sum().float()
+        gt_sum = gt_union.sum().float()
+        if pred_sum == 0 and gt_sum == 0:
+            return 1.0, 1.0
+
+        mask_iou_value = mask_iou(gt_union.view(1, -1).float(), pred_union.view(1, -1).float(), eps=eps).item()
+        if compute_dice:
+            dice_value = (2 * intersection + eps) / (pred_sum + gt_sum + eps)
+            return float(mask_iou_value), float(dice_value.item())
+        return float(mask_iou_value), 0.0
+
+    def update_metrics(self, preds: list[dict[str, torch.Tensor]], batch: dict[str, Any]) -> None:
+        """Update metrics with new predictions and ground truth, including mask Dice/mIoU."""
+        for si, pred in enumerate(preds):
+            self.seen += 1
+            pbatch = self._prepare_batch(si, batch)
+            predn = self._prepare_pred(pred)
+
+            cls = pbatch["cls"].cpu().numpy()
+            no_pred = predn["cls"].shape[0] == 0
+            mask_iou_value, mask_dice_value = self._mask_stats(
+                predn["masks"], pbatch["masks"], compute_dice=self.use_dice
+            )
+            self.metrics.update_stats(
+                {
+                    **self._process_batch(predn, pbatch),
+                    "target_cls": cls,
+                    "target_img": np.unique(cls),
+                    "conf": np.zeros(0) if no_pred else predn["conf"].cpu().numpy(),
+                    "pred_cls": np.zeros(0) if no_pred else predn["cls"].cpu().numpy(),
+                    "mask_iou": np.array([mask_iou_value], dtype=np.float32),
+                    "mask_dice": np.array([mask_dice_value], dtype=np.float32),
+                }
+            )
+            # Evaluate
+            if self.args.plots:
+                self.confusion_matrix.process_batch(predn, pbatch, conf=self.args.conf)
+                if self.args.visualize:
+                    self.confusion_matrix.plot_matches(batch["img"][si], pbatch["im_file"], self.save_dir)
+
+            if no_pred:
+                continue
+
+            # Save
+            if self.args.save_json or self.args.save_txt:
+                predn_scaled = self.scale_preds(predn, pbatch)
+            if self.args.save_json:
+                self.pred_to_json(predn_scaled, pbatch)
+            if self.args.save_txt:
+                self.save_one_txt(
+                    predn_scaled,
+                    self.args.save_conf,
+                    pbatch["ori_shape"],
+                    self.save_dir / "labels" / f"{Path(pbatch['im_file']).stem}.txt",
+                )
 
     def plot_predictions(self, batch: dict[str, Any], preds: list[dict[str, torch.Tensor]], ni: int) -> None:
         """Plot batch predictions with masks and bounding boxes.

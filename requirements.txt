@@ -1,16 +1,16 @@
 # Usage: pip install -r requirements.txt
 
 seaborn
-# onnxruntime-gpu
-wandb
+# wandb
 
 numpy
 
 onnx  # ONNX export
+onnxruntime-gpu
 onnx-simplifier>=0.4.1  # ONNX simplifier
+onnxslim>=0.1.71
 
 thop
 polars
-onnxslim
 timm==0.9.10
 setuptools>=70.0.0

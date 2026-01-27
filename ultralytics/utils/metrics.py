@@ -1563,16 +1563,24 @@ class SegmentMetrics(DetMetrics):
         summary: Generate a summarized representation of per-class segmentation metrics as a list of dictionaries.
     """
 
-    def __init__(self, names: dict[int, str] = {}) -> None:
+    def __init__(self, names: dict[int, str] = {}, compute_dice: bool = True) -> None:
         """Initialize a SegmentMetrics instance with a save directory, plot flag, and class names.
 
         Args:
             names (dict[int, str], optional): Dictionary of class names.
+            compute_dice (bool, optional): Whether to compute Dice coefficient for masks.
         """
         DetMetrics.__init__(self, names)
         self.seg = Metric()
         self.task = "segment"
         self.stats["tp_m"] = []  # add additional stats for masks
+        self.stats["mask_iou"] = []
+        self.stats["mask_dice"] = []
+        self.compute_dice = compute_dice
+        self.mask_iou = 0.0
+        self.mask_dice = 0.0
+        self.iou = None  # init miou list
+        self.dice = None
 
     def process(self, save_dir: Path = Path("."), plot: bool = False, on_plot=None) -> dict[str, np.ndarray]:
         """Process the detection and segmentation metrics over the given set of predictions.
@@ -1599,26 +1607,50 @@ class SegmentMetrics(DetMetrics):
         )[2:]
         self.seg.nc = len(self.names)
         self.seg.update(results_mask)
+        if self.iou:
+            self.iou = [self.iou[i] for i in self.ap_class_index]
+        if self.dice:
+            self.dice = [self.dice[i] for i in self.ap_class_index]
+
+        if "mask_iou" in stats:
+            self.mask_iou = float(stats["mask_iou"].mean()) if stats["mask_iou"].size else 0.0
+        if self.compute_dice and "mask_dice" in stats:
+            self.mask_dice = float(stats["mask_dice"].mean()) if stats["mask_dice"].size else 0.0
         return stats
 
     @property
     def keys(self) -> list[str]:
         """Return a list of keys for accessing metrics."""
-        return [
+        keys = [
             *DetMetrics.keys.fget(self),
             "metrics/precision(M)",
             "metrics/recall(M)",
             "metrics/mAP50(M)",
             "metrics/mAP50-95(M)",
         ]
+        if self.iou:
+            keys.append("metrics/mIoU(M)")
+        if self.dice:
+            keys.append("metrics/dice(M)")
+        return keys
 
     def mean_results(self) -> list[float]:
         """Return the mean metrics for bounding box and segmentation results."""
-        return DetMetrics.mean_results(self) + self.seg.mean_results()
+        results = DetMetrics.mean_results(self) + self.seg.mean_results()
+        if self.iou:
+            results.append(self.mIoU)
+        if self.dice:
+            results.append(self.mdice)
+        return results
 
     def class_result(self, i: int) -> list[float]:
         """Return classification results for a specified class index."""
-        return DetMetrics.class_result(self, i) + self.seg.class_result(i)
+        results = list(DetMetrics.class_result(self, i)) + list(self.seg.class_result(i))
+        if self.iou:
+            results.append(self.iou[i])
+        if self.dice:
+            results.append(self.dice[i])
+        return results
 
     @property
     def maps(self) -> np.ndarray:
@@ -1674,6 +1706,13 @@ class SegmentMetrics(DetMetrics):
             s.update({**{k: round(v[i], decimals) for k, v in per_class.items()}})
         return summary
 
+    @property
+    def mIoU(self):
+        return sum(self.iou) / len(self.iou) if self.iou else None
+
+    @property
+    def mdice(self):
+        return sum(self.dice) / len(self.dice) if self.dice else None
 
 class PoseMetrics(DetMetrics):
     """Calculate and aggregate detection and pose metrics over a given set of classes.
