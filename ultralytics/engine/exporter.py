@@ -4,38 +4,38 @@ Export a YOLO PyTorch model to other formats. TensorFlow exports authored by htt
 
 Format                  | `format=argument`         | Model
 ---                     | ---                       | ---
-PyTorch                 | -                         | yolo11n.pt
-TorchScript             | `torchscript`             | yolo11n.torchscript
-ONNX                    | `onnx`                    | yolo11n.onnx
-OpenVINO                | `openvino`                | yolo11n_openvino_model/
-TensorRT                | `engine`                  | yolo11n.engine
-CoreML                  | `coreml`                  | yolo11n.mlpackage
-TensorFlow SavedModel   | `saved_model`             | yolo11n_saved_model/
-TensorFlow GraphDef     | `pb`                      | yolo11n.pb
-TensorFlow Lite         | `tflite`                  | yolo11n.tflite
-TensorFlow Edge TPU     | `edgetpu`                 | yolo11n_edgetpu.tflite
-TensorFlow.js           | `tfjs`                    | yolo11n_web_model/
-PaddlePaddle            | `paddle`                  | yolo11n_paddle_model/
-MNN                     | `mnn`                     | yolo11n.mnn
-NCNN                    | `ncnn`                    | yolo11n_ncnn_model/
-IMX                     | `imx`                     | yolo11n_imx_model/
-RKNN                    | `rknn`                    | yolo11n_rknn_model/
-ExecuTorch              | `executorch`              | yolo11n_executorch_model/
-Axelera                 | `axelera`                 | yolo11n_axelera_model/
+PyTorch                 | -                         | yolo26n.pt
+TorchScript             | `torchscript`             | yolo26n.torchscript
+ONNX                    | `onnx`                    | yolo26n.onnx
+OpenVINO                | `openvino`                | yolo26n_openvino_model/
+TensorRT                | `engine`                  | yolo26n.engine
+CoreML                  | `coreml`                  | yolo26n.mlpackage
+TensorFlow SavedModel   | `saved_model`             | yolo26n_saved_model/
+TensorFlow GraphDef     | `pb`                      | yolo26n.pb
+TensorFlow Lite         | `tflite`                  | yolo26n.tflite
+TensorFlow Edge TPU     | `edgetpu`                 | yolo26n_edgetpu.tflite
+TensorFlow.js           | `tfjs`                    | yolo26n_web_model/
+PaddlePaddle            | `paddle`                  | yolo26n_paddle_model/
+MNN                     | `mnn`                     | yolo26n.mnn
+NCNN                    | `ncnn`                    | yolo26n_ncnn_model/
+IMX                     | `imx`                     | yolo26n_imx_model/
+RKNN                    | `rknn`                    | yolo26n_rknn_model/
+ExecuTorch              | `executorch`              | yolo26n_executorch_model/
+Axelera                 | `axelera`                 | yolo26n_axelera_model/
 
 Requirements:
     $ pip install "ultralytics[export]"
 
 Python:
     from ultralytics import YOLO
-    model = YOLO('yolo11n.pt')
+    model = YOLO('yolo26n.pt')
     results = model.export(format='onnx')
 
 CLI:
-    $ yolo mode=export model=yolo11n.pt format=onnx
+    $ yolo mode=export model=yolo26n.pt format=onnx
 
 Inference:
-    $ yolo predict model=yolo11n.pt                 # PyTorch
+    $ yolo predict model=yolo26n.pt                 # PyTorch
                          yolo11n.torchscript        # TorchScript
                          yolo11n.onnx               # ONNX Runtime or OpenCV DNN with dnn=True
                          yolo11n_openvino_model     # OpenVINO
@@ -404,6 +404,13 @@ class Exporter:
         if not hasattr(model, "names"):
             model.names = default_class_names()
         model.names = check_class_names(model.names)
+        if hasattr(model, "end2end"):
+            if self.args.end2end is not None:
+                model.end2end = self.args.end2end
+            if rknn or ncnn or executorch or paddle or imx:
+                # Disable end2end branch for certain export formats as they does not support topk
+                model.end2end = False
+                LOGGER.warning(f"{fmt.upper()} export does not support end2end models, disabling end2end branch.")
         if self.args.half and self.args.int8:
             LOGGER.warning("half=True and int8=True are mutually exclusive, setting half=False.")
             self.args.half = False
@@ -463,9 +470,6 @@ class Exporter:
             )
         if tfjs and (ARM64 and LINUX):
             raise SystemError("TF.js exports are not currently supported on ARM64 Linux")
-        if ncnn and hasattr(model.model[-1], "one2one_cv2"):
-            del model.model[-1].one2one_cv2  # Disable end2end branch for NCNN export as it does not support topk
-            LOGGER.warning("NCNN export does not support end2end models, disabling end2end branch.")
         # Recommend OpenVINO if export and Intel CPU
         if SETTINGS.get("openvino_msg"):
             if is_intel():
@@ -549,6 +553,7 @@ class Exporter:
             "names": model.names,
             "args": {k: v for k, v in self.args if k in fmt_keys},
             "channels": model.yaml.get("channels", 3),
+            "end2end": getattr(model, "end2end", False),
         }  # model metadata
         if dla is not None:
             self.metadata["dla"] = dla  # make sure `AutoBackend` uses correct dla device if it has one
@@ -556,8 +561,6 @@ class Exporter:
             self.metadata["kpt_shape"] = model.model[-1].kpt_shape
             if hasattr(model, "kpt_names"):
                 self.metadata["kpt_names"] = model.kpt_names
-        if getattr(model.model[-1], "end2end", False):
-            self.metadata["end2end"] = True
 
         LOGGER.info(
             f"\n{colorstr('PyTorch:')} starting from '{file}' with input shape {tuple(im.shape)} BCHW and "
@@ -614,12 +617,11 @@ class Exporter:
                 f"work. Use export 'imgsz={max(self.imgsz)}' if val is required."
             )
             imgsz = self.imgsz[0] if square else str(self.imgsz)[1:-1].replace(" ", "")
-            predict_data = f"data={data}" if model.task == "segment" and pb else ""
             q = "int8" if self.args.int8 else "half" if self.args.half else ""  # quantization
             LOGGER.info(
                 f"\nExport complete ({time.time() - t:.1f}s)"
                 f"\nResults saved to {colorstr('bold', file.parent.resolve())}"
-                f"\nPredict:         yolo predict task={model.task} model={f} imgsz={imgsz} {q} {predict_data}"
+                f"\nPredict:         yolo predict task={model.task} model={f} imgsz={imgsz} {q}"
                 f"\nValidate:        yolo val task={model.task} model={f} imgsz={imgsz} data={data} {q} {s}"
                 f"\nVisualize:       https://netron.app"
             )
@@ -930,7 +932,7 @@ class Exporter:
             model = IOSDetectModel(self.model, self.im, mlprogram=not mlmodel) if self.args.nms else self.model
         else:
             if self.args.nms:
-                LOGGER.warning(f"{prefix} 'nms=True' is only available for Detect models like 'yolo11n.pt'.")
+                LOGGER.warning(f"{prefix} 'nms=True' is only available for Detect models like 'yolo26n.pt'.")
                 # TODO CoreML Segment and Pose model pipelining
             model = self.model
         ts = torch.jit.trace(model.eval(), self.im, strict=False)  # TorchScript model
@@ -1046,7 +1048,7 @@ class Exporter:
                 "onnx_graphsurgeon>=0.3.26",  # required by 'onnx2tf' package
                 "ai-edge-litert>=1.2.0" + (",<1.4.0" if MACOS else ""),  # required by 'onnx2tf' package
                 "onnx>=1.12.0,<2.0.0",
-                "onnx2tf>=1.26.3",
+                "onnx2tf>=1.26.3,<1.29.0",  # pin to avoid h5py build issues on aarch64
                 "onnxslim>=0.1.71",
                 "onnxruntime-gpu" if cuda else "onnxruntime",
                 "protobuf>=5",
