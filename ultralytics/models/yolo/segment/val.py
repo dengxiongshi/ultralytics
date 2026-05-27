@@ -262,9 +262,9 @@ class SegmentationValidator(DetectionValidator):
 
             cls = pbatch["cls"].cpu().numpy()
             no_pred = predn["cls"].shape[0] == 0
-            mask_iou_value, mask_dice_value = self._mask_stats(
-                predn["masks"], pbatch["masks"], compute_dice=self.use_dice
-            )
+            # mask_iou_value, mask_dice_value = self._mask_stats(
+            #     predn["masks"], pbatch["masks"], compute_dice=self.use_dice
+            # )
             self.metrics.update_stats(
                 {
                     **self._process_batch(predn, pbatch),
@@ -272,8 +272,8 @@ class SegmentationValidator(DetectionValidator):
                     "target_img": np.unique(cls),
                     "conf": np.zeros(0) if no_pred else predn["conf"].cpu().numpy(),
                     "pred_cls": np.zeros(0) if no_pred else predn["cls"].cpu().numpy(),
-                    "mask_iou": np.array([mask_iou_value], dtype=np.float32),
-                    "mask_dice": np.array([mask_dice_value], dtype=np.float32),
+                    # "mask_iou": np.array([mask_iou_value], dtype=np.float32),
+                    # "mask_dice": np.array([mask_dice_value], dtype=np.float32),
                 }
             )
             # Evaluate

@@ -18,19 +18,20 @@ from ultralytics.nn.tasks import DetectionModel
 
 from ultralytics import YOLO
 
-weight = "/mnt/d/python_work/ultralytics/weights/yolov8s-seg.pt"
+weight = "/mnt/d/python_work/ultralytics/weights/yolo26s-seg.pt"
 source = "/mnt/d/python_work/ultralytics/ultralytics/assets/zidane.jpg"
 imgsz = 640
 device = 0
 project = ROOT / "runs/test"
 name = "result"
 # save_dir = r"C:\Users\dengxs\Desktop\test1\test\result"
-conf = 0.45
+conf = 0.25
+iou = 0.7
 classes = [0, 2]
 
 model = YOLO(model=weight, task="segment")
 
-results = model.predict(source=source, imgsz=imgsz, device=device, save=False,
+results = model.predict(source=source, imgsz=imgsz, device=device, save=True, show=False,
                         project=project, name=name, conf=conf)
 
 for img_path, result in zip([source], results):
@@ -52,9 +53,10 @@ for img_path, result in zip([source], results):
 
         resized_masks = []
         for m in mask_stack:
-            m = (m > 0.5).astype(np.uint8)
+            # m = (m > 0.5).astype(np.uint8)
             if m.shape != (H0, W0):
                 m = cv2.resize(m, (W0, H0), interpolation=cv2.INTER_NEAREST)
+            m = (m > 0.5).astype(np.uint8)
             resized_masks.append(m)
         resized_masks = np.stack(resized_masks, axis=0) if resized_masks else None
     else:
@@ -67,5 +69,6 @@ for img_path, result in zip([source], results):
         os.makedirs(save_dir, exist_ok=True)
         base = Path(img_path).stem
         out_img_path = f"{base}_pred.jpg"
-        cv2.imwrite(os.path.join(save_dir, out_img_path), img_data)
-        print(f"Saved rendered image (masks only) to: {out_img_path}")
+        save_path = os.path.join(save_dir, out_img_path)
+        cv2.imwrite(save_path, img_data)
+        print(f"Saved rendered image (masks only) to: {save_path}")

@@ -17,13 +17,13 @@ from ultralytics.nn.tasks import DetectionModel
 
 from ultralytics import YOLO
 
-weight = "/data/ultralytics/runs/train/detect/person_car/yolov8s/weights/best.onnx"
-datasets = "/determined/alluxio/public/dengxiongshi/datasets/person_car/20250211/person_car.yaml"
-batch_size = 32
+weight = "/data/ultralytics/weights/yolov8s-seg.pt"
+datasets = "/data/yolov5/datasets/coco128-seg/coco128-seg.yaml"
+batch_size = 2
 device = 0
-split = "test"  # Determines the dataset split to use for validation (val, test, or train)
-project = "runs/val/person_car"
-name = "yolov8s"
+split = "val"  # Determines the dataset split to use for validation (val, test, or train)
+project = ROOT / "runs/val/person_car"
+name = "yolov8s-seg"
 
 model = YOLO(model=weight)
 
@@ -32,3 +32,22 @@ results = model.val(data=datasets, imgsz=640, batch=batch_size, conf=0.001, iou=
 
 # Evaluate model performance on the validation set
 # metrics = model.val()
+
+# Assuming results contain both predicted masks and ground truth
+# for result in results:
+#     # Get predicted masks and ground truth masks
+#     pred_masks = result.masks.pred  # Predicted masks from the model
+#     gt_masks = result.masks.gt  # Ground truth masks from the dataset
+#
+#     # Calculate IoU for each class
+#     ious = []
+#     for i, (pred_mask, gt_mask) in enumerate(zip(pred_masks, gt_masks)):
+#         intersection = (pred_mask & gt_mask).sum()  # Logical AND
+#         union = (pred_mask | gt_mask).sum()  # Logical OR
+#         iou = intersection / union if union > 0 else 0
+#         ious.append(iou)
+#         print(f"Class {i}: IoU = {iou:.4f}")
+#
+#     # Calculate mean IoU across all classes
+#     mean_iou = sum(ious) / len(ious)
+#     print(f"Mean IoU: {mean_iou:.4f}")

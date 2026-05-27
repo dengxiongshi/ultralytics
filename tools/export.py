@@ -136,9 +136,9 @@ def main(args):
 #     main(args)
 
 
-weight = r"D:\python_work\ultralytics\weights\yolo11n.pt"
-imgsz = [384, 640]
-# cfg = "/data/ultralytics/weights/yolo11s.yaml"
+weight = r"G:\python_work\ultralytics\weights\yolo26s.pt"
+imgsz = [512, 640]
+cfg = "/mnt/d/python_work/ultralytics/models/yolo26/segment/yolo26s_xsmall.yaml"
 # datasets = "/data/yolov5/datasets/coco128/coco.yaml"
 # epoch = 600
 # batch_size = 32
@@ -147,7 +147,8 @@ device = "0"
 # name = "yolo11s"
 # optimizer = "SGD"
 opset = 11
+task = "segment"
 
-model = YOLO(model=weight, task="detect", verbose=True)
+model = YOLO(model=weight, task=task, verbose=True)
 
 model.export(format="onnx", imgsz=imgsz, device=device, simplify=True, opset=opset)

@@ -1574,8 +1574,8 @@ class SegmentMetrics(DetMetrics):
         self.seg = Metric()
         self.task = "segment"
         self.stats["tp_m"] = []  # add additional stats for masks
-        self.stats["mask_iou"] = []
-        self.stats["mask_dice"] = []
+        # self.stats["mask_iou"] = []
+        # self.stats["mask_dice"] = []
         self.compute_dice = compute_dice
         self.mask_iou = 0.0
         self.mask_dice = 0.0

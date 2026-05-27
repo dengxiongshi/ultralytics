@@ -111,6 +111,7 @@ from .CoreV8.SPPF.SimSPPF import SimSPPF
 from .GSConv import GSConv
 from .ShuffleNet import ShuffleNetV2, Conv_maxpool
 from .EfficientNetLite import MBConvBlock, stem
+from .fusion import ADD, RIFusion
 # from .V12.flashattention.A2C2F import A2C2f
 
 __all__ = (
@@ -120,6 +121,8 @@ __all__ = (
     "ShuffleNetV2",
     "stem",
     "MBConvBlock",
+    "ADD",
+    "RIFusion",
     # "A2C2f",
 
     "AIFI",

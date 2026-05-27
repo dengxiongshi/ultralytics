@@ -22,16 +22,16 @@ if platform.system() != 'Windows':
 from ultralytics import YOLO
 
 
-weight = "/mnt/d/python_work/ultralytics/weights/yolo11s-seg.pt"
-cfg = "/mnt/d/python_work/ultralytics/models/yolo11/segment/yolo11-seg.yaml"
+weight = "/mnt/d/python_work/ultralytics/weights/yolov8s-seg.pt"
+cfg = "/mnt/d/python_work/ultralytics/models/yolov8/segment/yolov8-seg.yaml"
 # datasets = "/determined/alluxio/public/dengxiongshi/datasets/person_car/20250211/person_car.yaml"
 datasets = "/mnt/d/python_work/yolov5/datasets/coco128-seg/coco128-seg.yaml"
 epoch = 600
 imgsz = 640
 batch_size = 1
 device = [0]
-project = "runs/test"
-name = "yolo11-seg"
+project = ROOT / "train/segment"
+name = "yolov8s-seg"
 optimizer = "SGD"
 
 # Add W&B callback for Ultralytics
