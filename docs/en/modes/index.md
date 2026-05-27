@@ -68,7 +68,7 @@ Track mode extends YOLO26's object detection capabilities to track objects acros
 
 ## [Benchmark](benchmark.md)
 
-Benchmark mode profiles the speed and accuracy of various export formats for YOLO26. This mode provides comprehensive metrics on model size, accuracy (mAP50-95 for detection tasks or accuracy_top5 for classification), and inference time across different formats like ONNX, [OpenVINO](https://docs.ultralytics.com/integrations/openvino/), and TensorRT. Benchmarking helps you select the optimal export format based on your specific requirements for speed and accuracy in your deployment environment.
+Benchmark mode profiles the speed and accuracy of various export formats for YOLO26. This mode provides comprehensive metrics on model size, accuracy (mAP50-95 for detection tasks or accuracy_top5 for classification), and inference time across different formats like ONNX, [OpenVINO](https://docs.ultralytics.com/integrations/openvino), and TensorRT. Benchmarking helps you select the optimal export format based on your specific requirements for speed and accuracy in your deployment environment.
 
 [Benchmark Examples](benchmark.md){ .md-button }
 
@@ -76,7 +76,7 @@ Benchmark mode profiles the speed and accuracy of various export formats for YOL
 
 ### How do I train a custom [object detection](https://www.ultralytics.com/glossary/object-detection) model with Ultralytics YOLO26?
 
-Training a custom object detection model with Ultralytics YOLO26 involves using the train mode. You need a dataset formatted in YOLO format, containing images and corresponding annotation files. Use the following command to start the training process:
+Training a custom object detection model with Ultralytics YOLO26 involves using the train mode. You need a dataset formatted in [YOLO format](../datasets/detect/index.md#ultralytics-yolo-format), containing images and corresponding annotation files. Use the following command to start the training process:
 
 !!! example
 

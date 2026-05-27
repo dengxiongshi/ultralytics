@@ -33,7 +33,7 @@ During training, the model iteratively makes predictions, calculates errors, and
   <img width="100%" src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/backpropagation-diagram.avif" alt="What is Backpropagation?">
 </p>
 
-This learning process makes it possible for the [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) model to perform various [tasks](../tasks/index.md), including [object detection](../tasks/detect.md), [instance segmentation](../tasks/segment.md), and [image classification](../tasks/classify.md). The ultimate goal is to create a model that can generalize its learning to new, unseen images so that it can accurately understand visual data in real-world applications.
+This learning process makes it possible for the [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) model to perform various [tasks](../tasks/index.md), including [object detection](../tasks/detect.md), [instance segmentation](../tasks/segment.md), [semantic segmentation](../tasks/semantic.md), and [image classification](../tasks/classify.md). The ultimate goal is to create a model that can generalize its learning to new, unseen images so that it can accurately understand visual data in real-world applications.
 
 Now that we know what is happening behind the scenes when we train a model, let's look at points to consider when training a model.
 
@@ -160,7 +160,16 @@ Different optimizers have various strengths and weaknesses. Let's take a glimpse
     - Adjusts the learning rate for each parameter by dividing the gradient by a running average of the magnitudes of recent gradients.
     - Helps in handling the vanishing gradient problem and is effective for [recurrent neural networks](https://www.ultralytics.com/glossary/recurrent-neural-network-rnn).
 
-For YOLO26, the `optimizer` parameter lets you choose from various optimizers, including SGD, Adam, AdamW, NAdam, RAdam, and RMSProp, or you can set it to `auto` for automatic selection based on model configuration.
+- **MuSGD (Muon + SGD hybrid)**:
+    - Combines SGD-style updates with Muon-inspired behavior for improved stability in large-scale training.
+    - A good choice when you want SGD-like generalization but need smoother convergence than vanilla SGD.
+    - Especially relevant for YOLO26 training recipes; if unsure, start with `optimizer=auto` and compare against MuSGD on your dataset.
+
+For YOLO26, the `optimizer` parameter lets you choose from various optimizers, including SGD, MuSGD, Adam, AdamW, NAdam, RAdam, and RMSProp, or you can set it to `auto` for automatic selection based on model configuration.
+
+```bash
+yolo train model=yolo26n.pt data=coco8.yaml optimizer=MuSGD
+```
 
 ## Connecting with the Community
 

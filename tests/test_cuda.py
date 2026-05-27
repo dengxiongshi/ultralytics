@@ -12,7 +12,7 @@ from ultralytics import YOLO
 from ultralytics.cfg import TASK2DATA, TASK2MODEL, TASKS
 from ultralytics.utils import ASSETS, IS_JETSON, WEIGHTS_DIR
 from ultralytics.utils.autodevice import GPUInfo
-from ultralytics.utils.checks import check_amp
+from ultralytics.utils.checks import check_amp, check_tensorrt
 from ultralytics.utils.torch_utils import TORCH_1_13
 
 # Try to find idle devices if CUDA is available
@@ -52,7 +52,7 @@ def test_amp():
     [  # generate all combinations except for exclusion cases
         (task, dynamic, int8, half, batch, simplify, nms)
         for task, dynamic, int8, half, batch, simplify, nms in product(
-            TASKS, [True, False], [False], [False], [1, 2], [True, False], [True, False]
+            sorted(TASKS), [True, False], [False], [False], [1, 2], [True, False], [True, False]
         )
         if not (
             (int8 and half) or (task == "classify" and nms) or (task == "obb" and nms and (not TORCH_1_13 or IS_JETSON))
@@ -85,12 +85,13 @@ def test_export_onnx_matrix(task, dynamic, int8, half, batch, simplify, nms):
         (task, dynamic, int8, half, batch)
         # Note: tests reduced below pending compute availability expansion as GPU CI runner utilization is high
         # for task, dynamic, int8, half, batch in product(TASKS, [True, False], [True, False], [True, False], [1, 2])
-        for task, dynamic, int8, half, batch in product(TASKS, [True], [True], [False], [2])
+        for task, dynamic, int8, half, batch in product(sorted(TASKS), [True], [True], [False], [2])
         if not (int8 and half)  # exclude cases where both int8 and half are True
     ],
 )
 def test_export_engine_matrix(task, dynamic, int8, half, batch):
     """Test YOLO model export to TensorRT format for various configurations and run inference."""
+    check_tensorrt()
     import tensorrt as trt
 
     is_trt10 = int(trt.__version__.split(".", 1)[0]) >= 10
@@ -120,9 +121,11 @@ def test_train():
     device = tuple(DEVICES) if len(DEVICES) > 1 else DEVICES[0]
     # NVIDIA Jetson only has one GPU and therefore skipping checks
     if not IS_JETSON:
-        results = YOLO(MODEL).train(data="coco8.yaml", imgsz=64, epochs=1, device=device, batch=15)
+        results = YOLO(MODEL).train(data="coco8-grayscale.yaml", imgsz=64, epochs=1, device=DEVICES[0], batch=-1)
+        results = YOLO(MODEL).train(data="coco8.yaml", imgsz=64, epochs=1, device=device, batch=15, compile=True)
         results = YOLO(MODEL).train(data="coco128.yaml", imgsz=64, epochs=1, device=device, batch=15, val=False)
-        visible = eval(os.environ["CUDA_VISIBLE_DEVICES"])
+        visible = tuple(int(x) for x in os.environ["CUDA_VISIBLE_DEVICES"].split(","))
+        visible = visible[0] if len(visible) == 1 else visible
         assert visible == device, f"Passed GPUs '{device}', but used GPUs '{visible}'"
         # Note DDP training returns None, single-GPU returns metrics
         assert (results is None) if len(DEVICES) > 1 else (results is not None)
@@ -165,19 +168,19 @@ def test_autobatch():
     """Check optimal batch size for YOLO model training using autobatch utility."""
     from ultralytics.utils.autobatch import check_train_batch_size
 
-    check_train_batch_size(YOLO(MODEL).model.to(f"cuda:{DEVICES[0]}"), imgsz=128, amp=True)
+    check_train_batch_size(YOLO(MODEL).model.to(f"cuda:{DEVICES[0]}"), imgsz=64, amp=True)
 
 
 @pytest.mark.slow
 @pytest.mark.skipif(not DEVICES, reason="No CUDA devices available")
-def test_utils_benchmarks():
+def test_utils_benchmarks(isolated_model):
     """Profile YOLO models for performance benchmarks."""
     from ultralytics.utils.benchmarks import ProfileModels
 
     # Pre-export a dynamic engine model to use dynamic inference
-    YOLO(MODEL).export(format="engine", imgsz=32, dynamic=True, batch=1, device=DEVICES[0])
+    YOLO(isolated_model).export(format="engine", imgsz=32, dynamic=True, batch=1, device=DEVICES[0])
     ProfileModels(
-        [MODEL],
+        [isolated_model],
         imgsz=32,
         half=False,
         min_time=1,
@@ -214,6 +217,7 @@ def test_predict_sam():
             imgsz=1024,
             model=WEIGHTS_DIR / "mobile_sam.pt",
             device=DEVICES[0],
+            half=True,
         )
     )
     predictor.set_image(ASSETS / "zidane.jpg")
