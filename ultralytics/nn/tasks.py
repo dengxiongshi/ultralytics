@@ -82,6 +82,7 @@ from ultralytics.utils.loss import (
     PoseLoss26,
     SemanticSegmentationLoss,
     v8ClassificationLoss,
+    v8MultiLabelClassificationLoss,
     v8DetectionLoss,
     v8OBBLoss,
     v8PoseLoss,
@@ -963,6 +964,9 @@ class ClassificationModel(BaseModel):
 
     def init_criterion(self):
         """Initialize the loss criterion for the ClassificationModel."""
+        for m in self.model.modules():
+            if isinstance(m, Classify) and getattr(m, "multi_label", False):
+                return v8MultiLabelClassificationLoss()
         return v8ClassificationLoss()
 
 

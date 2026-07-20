@@ -767,6 +767,18 @@ class Model(torch.nn.Module):
             "task": self.task,
         }  # method defaults
         args = {**overrides, **custom, **kwargs, "mode": "train", "session": self.session}  # prioritizes rightmost args
+        if isinstance(args.get("data"), (list, tuple)):  # fine-tune a single base model across multiple datasets
+            from ultralytics.engine.trainer import MultiTrainer
+
+            use_python_trainer = trainer is not None or self.callbacks != callbacks.get_default_callbacks()
+            self.trainer = MultiTrainer(
+                (trainer or self._smart_load("trainer")) if use_python_trainer else None,
+                args,
+                self.model,
+                _callbacks=self.callbacks,
+            )
+            self.metrics = self.trainer.train()
+            return self.metrics
         pretrained = kwargs.get("pretrained", overrides.get("pretrained", True) if kwargs.get("cfg") else True)
         if args.get("resume"):
             if args["resume"] is True:  # resume=True (boolean) uses current model as checkpoint
@@ -1040,7 +1052,7 @@ class Model(torch.nn.Module):
             >>> print(reset_args)
             {'imgsz': 640, 'data': 'coco.yaml', 'task': 'detect'}
         """
-        include = {"imgsz", "data", "task", "single_cls"}  # only remember these arguments when loading a PyTorch model
+        include = {"imgsz", "data", "task", "single_cls", "multi_label"}  # only remember these arguments when loading a PyTorch model
         return {k: v for k, v in args.items() if k in include}
 
     # def __getattr__(self, attr):
