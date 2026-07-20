@@ -98,7 +98,7 @@ class Detect(nn.Module):
         super().__init__()
         self.nc = nc  # number of classes
         self.nl = len(ch)  # number of detection layers
-        self.reg_max = reg_max  # DFL channels (ch[0] // 16 to scale 4/8/12/16/20 for n/s/m/l/x)
+        self.reg_max = reg_max  # DFL channels
         self.no = nc + self.reg_max * 4  # number of outputs per anchor
         self.stride = torch.zeros(self.nl)  # strides computed during build
         c2, c3 = max((16, ch[0] // 4, self.reg_max * 4)), max(ch[0], min(self.nc, 100))  # channels
@@ -242,7 +242,7 @@ class Detect(nn.Module):
         Returns:
             (torch.Tensor, torch.Tensor, torch.Tensor): Top scores, class indices, and filtered indices.
         """
-        batch_size, anchors, nc = scores.shape  # i.e. shape(16,8400,84)
+        batch_size, anchors, nc = scores.shape  # i.e. shape(16,8400,80)
         # Use max_det directly during export for TensorRT compatibility (requires k to be constant),
         # otherwise use min(max_det, anchors) for safety with small inputs during Python inference
         k = max_det if self.export else min(max_det, anchors)
@@ -999,7 +999,7 @@ class YOLOEDetect(Detect):
         >>> yoloe_detect = YOLOEDetect(nc=80, embed=512, with_bn=True, ch=(256, 512, 1024))
         >>> x = [torch.randn(1, 256, 80, 80), torch.randn(1, 512, 40, 40), torch.randn(1, 1024, 20, 20)]
         >>> cls_pe = torch.randn(1, 80, 512)
-        >>> outputs = yoloe_detect(x, cls_pe)
+        >>> outputs = yoloe_detect([*x, cls_pe])
     """
 
     is_fused = False
@@ -1209,7 +1209,7 @@ class YOLOESegment(YOLOEDetect):
         >>> yoloe_segment = YOLOESegment(nc=80, nm=32, npr=256, embed=512, with_bn=True, ch=(256, 512, 1024))
         >>> x = [torch.randn(1, 256, 80, 80), torch.randn(1, 512, 40, 40), torch.randn(1, 1024, 20, 20)]
         >>> text = torch.randn(1, 80, 512)
-        >>> outputs = yoloe_segment(x, text)
+        >>> outputs = yoloe_segment([*x, text])
     """
 
     def __init__(
@@ -1459,6 +1459,7 @@ class RTDETRDecoder(nn.Module):
     """
 
     export = False  # export mode
+    max_det = 300  # max detections per image
     shapes = []
     anchors = torch.empty(0)
     valid_mask = torch.empty(0)
@@ -1602,10 +1603,11 @@ class RTDETRDecoder(nn.Module):
             scores (torch.Tensor): Class scores with shape (batch_size, num_queries, nc).
 
         Returns:
-            (torch.Tensor): Processed predictions with shape (batch_size, num_queries, 6) and last dimension format [cx,
-                cy, w, h, max_class_prob, class_index].
+            (torch.Tensor): Processed predictions with shape (batch_size, num_queries, 6), limited to max_det during
+                export, and last dimension format [cx, cy, w, h, max_class_prob, class_index].
         """
-        scores, index = scores.flatten(1).topk(self.num_queries)
+        k = min(self.num_queries, self.max_det) if self.export else self.num_queries
+        scores, index = scores.flatten(1).topk(k)
         # CoreML MIL lacks integer floor-div and mod lowering: use torch.div(rounding_mode="floor") and (index - q*nc).
         query_idx = torch.div(index, self.nc, rounding_mode="floor")
         boxes = boxes.gather(dim=1, index=query_idx.unsqueeze(-1).expand(-1, -1, 4).long())
@@ -1830,6 +1832,7 @@ class SemanticSegment(nn.Module):
 
     export = False  # export mode
     format = None  # export format
+    bake_argmax = False  # export: emit [B, H, W] class map (TensorRT>=10 and multi-class Hailo-10/15)
 
     def __init__(self, nc=19, ch=()):
         """Initialize the semantic segmentation head.
@@ -1856,8 +1859,10 @@ class SemanticSegment(nn.Module):
             x (list[torch.Tensor]): List of feature maps [P3, P4].
 
         Returns:
-            (torch.Tensor): Logits of shape [B, nc, H/8, W/8] during training, inference, and CoreML export. Other
-                export formats return upsampled logits of shape [B, nc, H, W].
+            (torch.Tensor | tuple): Logits of shape [B, nc, H/8, W/8] during training (or a (main, aux) tuple when
+                aux_head is present) and inference. ONNX, MNN, TensorRT>=10, and multi-class Hailo-10/15 export bake in
+                the class reduction and return a compact map of shape [B, H, W] (uint8 when nc <= 256, else int32).
+                Other export formats return upsampled logits of shape [B, nc, H, W].
         """
         # Classify
         logits = self.classifier(x[0])  # [B, nc, H/8, W/8]
@@ -1865,6 +1870,13 @@ class SemanticSegment(nn.Module):
             if self.aux_head is not None:
                 return logits, self.aux_head(x[1])  # main + aux (P4)
             return logits
-        if self.export and self.format != "coreml":  # coreml does not support interpolate
-            return F.interpolate(logits, scale_factor=8, mode="bilinear", align_corners=False)
+        if self.export:
+            y = F.interpolate(logits, scale_factor=8, mode="bilinear", align_corners=False)  # [B, nc, H, W]
+            # Bake class reduction: emit [B, H, W] map, shrinking the D2H copy ~80x. ONNX/MNN and multi-class
+            # Hailo-10/15 preserve the integer output; TensorRT supports uint8 graph outputs only on TRT>=10, so
+            # engine and Hailo baking are gated by the exporter.
+            if self.format in {"onnx", "mnn"} or (self.format in {"engine", "hailo"} and self.bake_argmax):
+                cls = y.argmax(1) if self.nc > 1 else y.squeeze(1) > 0
+                return cls.to(torch.uint8 if self.nc <= 256 else torch.int32)
+            return y
         return logits

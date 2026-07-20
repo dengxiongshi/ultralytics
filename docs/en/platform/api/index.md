@@ -1,4 +1,5 @@
 ---
+plans: [free, pro, enterprise]
 comments: true
 description: Complete REST API reference for Ultralytics Platform including authentication, endpoints, and examples for datasets, models, and deployments.
 keywords: Ultralytics Platform, REST API, API reference, authentication, endpoints, YOLO, programmatic access
@@ -28,15 +29,18 @@ The API is organized around the core platform resources:
 
 ```mermaid
 graph LR
-    A[API Key] --> B[Datasets]
-    A --> C[Projects]
-    A --> D[Models]
-    A --> E[Deployments]
+    A[API Key]:::start --> B[Datasets]:::proc
+    A --> C[Projects]:::proc
+    A --> D[Models]:::proc
+    A --> E[Deployments]:::proc
     B -->|train on| D
     C -->|contains| D
     D -->|deploy to| E
-    D -->|export| F[Exports]
+    D -->|export| F[Exports]:::proc
     B -->|auto-annotate| B
+
+    classDef start fill:#4CAF50,color:#fff
+    classDef proc fill:#2196F3,color:#fff
 ```
 
 | Resource                                   | Description                   | Key Operations                                |
@@ -47,12 +51,12 @@ graph LR
 | [Deployments](../deploy/endpoints.md)      | Dedicated inference endpoints | CRUD, start/stop, metrics, logs, health       |
 | [Exports](../train/models.md#export-model) | Format conversion jobs        | Create, status, download                      |
 | [Training](../train/cloud-training.md)     | Cloud GPU training jobs       | Start, status, cancel                         |
-| [Billing](../account/billing.md)           | Credits and subscriptions     | Balance, top-up, payment methods              |
-| [Teams](../account/teams.md)               | Workspace collaboration       | Members, invites, roles                       |
+| [Billing](../account/billing.md)           | Credits and usage             | Balance, usage, transactions                  |
+| [Teams](../account/teams.md)               | Workspace collaboration       | Workspaces, members, roles                    |
 
 ## Authentication
 
-Resource APIs such as datasets, projects, models, training, exports, and predictions use API-key authentication. Public endpoints (listing public datasets, projects, and models) support anonymous read access without a key. Account-oriented routes — including activity, settings, teams, billing, and GDPR flows — currently require an authenticated browser session and are not available via API key.
+Resource APIs use API-key authentication, including dataset class and split management, cloning, training, exports, deployments, and supported account reads. Public endpoints support anonymous access where noted. Browser-only application routes are excluded.
 
 ### Get API Key
 
@@ -109,7 +113,7 @@ Authorization: Bearer YOUR_API_KEY
 
 All API endpoints use:
 
-```
+```text
 https://platform.ultralytics.com/api
 ```
 
@@ -135,7 +139,7 @@ Rate limits are applied automatically based on the endpoint being called. Expens
 | **Upload**    | 10 requests/min  | File uploads, signed URLs, and dataset ingest                                            |
 | **Predict**   | 20 requests/min  | Shared model inference (`POST /api/models/{id}/predict`)                                 |
 | **Export**    | 20 requests/min  | Model format exports (`POST /api/exports`), dataset NDJSON exports, and version creation |
-| **Download**  | 30 requests/min  | Model weight file downloads (`GET /api/models/{id}/download`)                            |
+| **Download**  | 30 requests/min  | Model weight file downloads (`GET /api/models/{id}/files`)                               |
 | **Dedicated** | **Unlimited**    | [Dedicated endpoints](../deploy/endpoints.md) — your own service, no API limits          |
 
 Each category has an independent counter per API key. For example, making 20 predict requests does not affect your 100 request/min default allowance.
@@ -195,12 +199,13 @@ GET /api/datasets
 
 **Query Parameters:**
 
-| Parameter  | Type   | Description                            |
-| ---------- | ------ | -------------------------------------- |
-| `username` | string | Filter by username                     |
-| `slug`     | string | Fetch single dataset by slug           |
-| `limit`    | int    | Items per page (default: 20, max: 500) |
-| `owner`    | string | Workspace owner username               |
+| Parameter          | Type    | Description                                                     |
+| ------------------ | ------- | --------------------------------------------------------------- |
+| `username`         | string  | Filter by username                                              |
+| `limit`            | int     | Items per page (default: 1000, max: 1000)                       |
+| `owner`            | string  | Workspace owner username                                        |
+| `includeImageUrls` | boolean | Include signed full-size sample image URLs (default: `false`)   |
+| `includeSamples`   | boolean | Set `false` to omit sample images and reduce the response size. |
 
 === "cURL"
 
@@ -265,6 +270,8 @@ GET /api/datasets/{datasetId}
 
 Returns full dataset details including metadata, class names, and split counts.
 
+Pass `username` when `{datasetId}` is a dataset slug rather than an ID.
+
 ### Create Dataset
 
 ```http
@@ -286,7 +293,17 @@ POST /api/datasets
 
 !!! note "Supported Tasks"
 
-    Valid `task` values: `detect`, `segment`, `classify`, `pose`, `obb`.
+    Valid `task` values: `detect`, `segment`, `semantic`, `classify`, `pose`, `obb`.
+
+**Response:**
+
+```json
+{
+    "datasetId": "dataset_abc123",
+    "slug": "my-dataset",
+    "region": "us"
+}
+```
 
 ### Update Dataset
 
@@ -304,6 +321,15 @@ PATCH /api/datasets/{datasetId}
 }
 ```
 
+### Dataset Icon
+
+```http
+POST /api/datasets/{datasetId}/icon
+DELETE /api/datasets/{datasetId}/icon
+```
+
+Upload a WebP icon up to 5 MB as multipart form field `image`, or remove the current icon.
+
 ### Delete Dataset
 
 ```http
@@ -318,15 +344,17 @@ Soft-deletes the dataset (moved to [trash](../account/trash.md), recoverable for
 POST /api/datasets/{datasetId}/clone
 ```
 
-Creates a copy of the dataset with all images and labels. Only public datasets can be cloned. Requires an active platform browser session — not available via API key.
+Creates a copy of a public, owned, or editable workspace dataset with all images and labels.
 
-**Body (all fields optional):**
+**Optional body (all fields are optional):**
 
 ```json
 {
     "name": "cloned-dataset",
+    "slug": "cloned-dataset",
     "description": "My cloned dataset",
     "visibility": "private",
+    "license": "AGPL-3.0",
     "owner": "team-username"
 }
 ```
@@ -406,6 +434,20 @@ Update the description of an existing version. Owner-only.
 }
 ```
 
+### Restore Dataset Version
+
+```http
+POST /api/datasets/{datasetId}/restore
+```
+
+Rebuild the dataset's images, annotations, and classes from a saved version without copying image bytes.
+
+```json
+{
+    "version": 2
+}
+```
+
 ### Get Class Statistics
 
 ```http
@@ -448,6 +490,69 @@ Returns class distribution, location heatmap, and dimension statistics. Results 
     "sampleSize": 1000
 }
 ```
+
+### Manage Classes
+
+Merge classes (reassign annotations from source classes to a target, then remove the sources):
+
+```http
+POST /api/datasets/{datasetId}/classes/merge
+```
+
+```json
+{
+    "sourceClassIds": [2, 4],
+    "targetClassId": 1
+}
+```
+
+Class IDs are positional, so merging is not idempotent. Re-fetch the dataset before retrying.
+
+Delete classes:
+
+```http
+POST /api/datasets/{datasetId}/classes/delete
+```
+
+```json
+{
+    "classIds": [2, 4]
+}
+```
+
+### Redistribute Splits
+
+```http
+POST /api/datasets/{datasetId}/splits/redistribute
+```
+
+Randomly reassign images across train, validation, and test splits. Percentages must total 100.
+
+```json
+{
+    "train": 80,
+    "val": 20,
+    "test": 0
+}
+```
+
+### Dataset Embeddings
+
+```http
+GET /api/datasets/{datasetId}/embeddings
+POST /api/datasets/{datasetId}/embeddings
+DELETE /api/datasets/{datasetId}/embeddings
+```
+
+GET returns the current UMAP analysis summary and active job status; POST enqueues an embeddings analysis job; DELETE cancels the active job.
+
+### Image Clustering
+
+```http
+GET /api/datasets/{datasetId}/images/clustering
+```
+
+Returns the UMAP 2D layout and per-image metadata for the clustering scatter view (paged and rate-limited).
 
 ### Get Models Trained on Dataset
 
@@ -500,12 +605,12 @@ Run YOLO inference on dataset images to auto-generate annotations. Uses a select
 
 **Body:**
 
-| Field        | Type   | Required | Description                          |
-| ------------ | ------ | -------- | ------------------------------------ |
-| `imageHash`  | string | Yes      | Hash of the image to annotate        |
-| `modelId`    | string | No       | Model ID to use for inference        |
-| `confidence` | float  | No       | Confidence threshold (default: 0.25) |
-| `iou`        | float  | No       | IoU threshold (default: 0.45)        |
+| Field        | Type   | Required | Description                                                                                                                                       |
+| ------------ | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `imageHash`  | string | Yes      | Hash of the image to annotate                                                                                                                     |
+| `modelId`    | string | No       | Model to use for inference, as a `ul://` URI (e.g. `ul://username/project/model`). If omitted, the dataset's task-specific default model is used. |
+| `confidence` | float  | No       | Confidence threshold (default: 0.25)                                                                                                              |
+| `iou`        | float  | No       | IoU threshold (default: 0.7)                                                                                                                      |
 
 ### Dataset Ingest
 
@@ -513,16 +618,67 @@ Run YOLO inference on dataset images to auto-generate annotations. Uses a select
 POST /api/datasets/ingest
 ```
 
-Create a dataset ingest job to process uploaded ZIP or TAR files, including `.tar.gz` and `.tgz`, containing images and labels.
+Create a dataset ingest job for an existing dataset. The target dataset is always passed as `datasetId` in the JSON body, not in the URL path.
+
+The request body requires `datasetId` plus exactly one of `sessionId` (an uploaded archive's upload session) or `sourceUrl` (a remote ZIP, TAR, TAR.GZ, TGZ, or NDJSON URL). Add optional `targetSplit` (`train`, `val`, or `test`) to override the archive's split structure.
+
+For uploaded archives, the upload session is already bound to the dataset by the `assetId` passed to `POST /api/upload/signed-url`; ingest validates that `assetId` matches the body `datasetId`. Optional `classMapping` entries map each incoming class name to an existing zero-based class index, a class name to reuse or create, or `null` to skip the class. For remote `sourceUrl` imports, create the dataset first, then pass its `datasetId` to ingest.
+
+**Body (uploaded archive):**
+
+```json
+{
+    "datasetId": "dataset_abc123",
+    "sessionId": "session_abc123",
+    "targetSplit": "train"
+}
+```
+
+**Body (remote archive or NDJSON):**
+
+```json
+{
+    "datasetId": "dataset_abc123",
+    "sourceUrl": "https://example.com/my-dataset.zip"
+}
+```
+
+**Body (later ingest, importing labels):**
+
+```json
+{
+    "datasetId": "dataset_abc123",
+    "sessionId": "session_abc123",
+    "classMapping": { "person": 0, "automobile": "car", "background": null }
+}
+```
+
+!!! note "Class Mapping"
+
+    The first ingest creates classes from the archive automatically. On later ingests, archive classes omitted from `classMapping` first fall back to a case-insensitive match against existing dataset classes. Labels are skipped only for classes explicitly mapped to `null` or without a matching existing class.
+
+**Response:**
+
+```json
+{
+    "jobId": "job_abc123",
+    "datasetId": "dataset_abc123",
+    "status": "queued"
+}
+```
 
 ```mermaid
 graph LR
-    A[Upload Archive] --> B[POST /api/datasets/ingest]
-    B --> C[Process Archive]
-    C --> D[Extract images]
-    C --> E[Parse labels]
-    C --> F[Generate thumbnails]
-    D & E & F --> G[Dataset ready]
+    A[POST /api/datasets]:::start --> B[POST /api/upload/signed-url]:::proc
+    B --> C[Upload archive to signed URL]:::proc
+    C --> D[POST /api/upload/complete]:::proc
+    D --> E[POST /api/datasets/ingest]:::proc
+    E --> F[Process archive]:::proc
+    F --> G[Dataset ready]:::out
+
+    classDef start fill:#4CAF50,color:#fff
+    classDef proc fill:#2196F3,color:#fff
+    classDef out fill:#9C27B0,color:#fff
 ```
 
 ### Dataset Images
@@ -544,8 +700,23 @@ GET /api/datasets/{datasetId}/images
 | `hasLabel`          | string | Filter by label status (`true` or `false`)                                                                                                                                                                     |
 | `hasError`          | string | Filter by error status (`true` or `false`)                                                                                                                                                                     |
 | `search`            | string | Search by filename or image hash                                                                                                                                                                               |
+| `classIds`          | string | Comma-separated class IDs; returns images containing any of the specified classes                                                                                                                              |
 | `includeThumbnails` | string | Include signed thumbnail URLs (default: `true`)                                                                                                                                                                |
 | `includeImageUrls`  | string | Include signed full image URLs (default: `false`)                                                                                                                                                              |
+
+#### Get Selected Images
+
+```http
+POST /api/datasets/{datasetId}/images
+```
+
+Returns the same image shape for up to 1,000 supplied image IDs. It accepts the same URL and label query controls as the list operation.
+
+```json
+{
+    "imageIds": ["IMAGE_OBJECT_ID"]
+}
+```
 
 #### Get Signed Image URLs
 
@@ -643,7 +814,11 @@ POST /api/projects
     curl -X POST \
       -H "Authorization: Bearer YOUR_API_KEY" \
       -H "Content-Type: application/json" \
-      -d '{"name": "my-project", "slug": "my-project", "description": "Detection experiments"}' \
+      -d '{
+        "name": "my-project",
+        "slug": "my-project",
+        "description": "Detection experiments"
+      }' \
       https://platform.ultralytics.com/api/projects
     ```
 
@@ -653,7 +828,11 @@ POST /api/projects
     resp = requests.post(
         "https://platform.ultralytics.com/api/projects",
         headers={"Authorization": f"Bearer {API_KEY}"},
-        json={"name": "my-project", "slug": "my-project", "description": "Detection experiments"},
+        json={
+            "name": "my-project",
+            "slug": "my-project",
+            "description": "Detection experiments",
+        },
     )
     project_id = resp.json()["projectId"]
     ```
@@ -678,23 +857,16 @@ Soft-deletes the project (moved to [trash](../account/trash.md)).
 POST /api/projects/{projectId}/clone
 ```
 
-Clones a public project (with all its models) into your workspace. Requires an active platform browser session — not available via API key.
+Clones a public, owned, or editable workspace project and its models into your account or workspace. An optional JSON body accepts `name`, `slug`, `description`, `visibility`, `license`, and destination `owner` overrides.
 
 ### Project Icon
 
-Upload a project icon (multipart form with image file):
-
 ```http
 POST /api/projects/{projectId}/icon
-```
-
-Remove the project icon:
-
-```http
 DELETE /api/projects/{projectId}/icon
 ```
 
-Both require an active platform browser session — not available via API key.
+Upload a WebP icon up to 5 MB as multipart form field `image`, or remove the current icon.
 
 ---
 
@@ -723,7 +895,7 @@ GET /api/models
 GET /api/models/completed
 ```
 
-Returns models that have finished training (for use in model selectors and deployment).
+Returns up to 1,000 models with usable weights across all projects for training and deployment. Pass `owner` for a workspace.
 
 ### Get Model
 
@@ -749,7 +921,7 @@ POST /api/models
 
 !!! note "Model File Upload"
 
-    Model `.pt` file uploads are handled separately. Use the platform UI to drag-and-drop model files onto a project.
+    To attach `.pt` weights, request a signed upload URL with `assetType: models` and this model's ID as `assetId`, upload the file, then call `POST /api/upload/complete` with the returned `sessionId`.
 
 ### Update Model
 
@@ -777,7 +949,7 @@ Returns signed download URLs for model files.
 POST /api/models/{modelId}/clone
 ```
 
-Clone a public model to one of your projects. Requires an active platform browser session — not available via API key.
+Clone a public, owned, or editable workspace model to one of your projects.
 
 **Body:**
 
@@ -811,14 +983,21 @@ Track model download analytics.
 POST /api/models/{modelId}/predict
 ```
 
+Public models can be predicted without authentication. Private and shared models require an API key with access to the parent project.
+
 **Multipart Form:**
 
-| Field   | Type  | Description                          |
-| ------- | ----- | ------------------------------------ |
-| `file`  | file  | Image file (JPEG, PNG, WebP)         |
-| `conf`  | float | Confidence threshold (default: 0.25) |
-| `iou`   | float | IoU threshold (default: 0.7)         |
-| `imgsz` | int   | Image size in pixels (default: 640)  |
+| Field       | Type    | Description                                                         |
+| ----------- | ------- | ------------------------------------------------------------------- |
+| `file`      | file    | Image or video file (e.g. JPG, PNG, WebP, BMP, TIFF; MP4, MOV, AVI) |
+| `source`    | string  | Image URL or base64-encoded image (alternative to `file`)           |
+| `conf`      | float   | Confidence threshold, 0.01–1 (default: 0.25)                        |
+| `iou`       | float   | IoU threshold, 0–0.95 (default: 0.7)                                |
+| `imgsz`     | int     | Image size, 32–1280 pixels (default: 640)                           |
+| `normalize` | boolean | Return normalized coordinates (default: `false`)                    |
+| `decimals`  | int     | Coordinate precision, 0–10 (default: 5)                             |
+
+Provide either `file` or `source`. Maximum upload size is 100 MB.
 
 === "cURL"
 
@@ -845,6 +1024,8 @@ POST /api/models/{modelId}/predict
 
 **Response:**
 
+Responses contain per-image `shape`, `speed`, `results`, and optional semantic mask data, plus `metadata` with image count, function timing, task, and service versions. Internal model paths are never returned.
+
 ```json
 {
     "images": [
@@ -866,40 +1047,26 @@ POST /api/models/{modelId}/predict
 }
 ```
 
-### Get Predict Token
-
-```http
-POST /api/models/{modelId}/predict/token
-```
-
-!!! note "Browser session only"
-
-    This route is used by the in-app Predict tab to issue short-lived inference tokens for direct browser → predict-service calls (lower latency, no API proxy). It requires an active platform browser session and is not available via API key. For programmatic inference, call [`POST /api/models/{modelId}/predict`](#run-inference) with your API key.
-
-### Warmup Model
-
-```http
-POST /api/models/{modelId}/predict/warmup
-```
-
-!!! note "Browser session only"
-
-    The warmup route is used by the Predict tab to pre-load a model's weights on the predict service before the user's first inference. It requires an active platform browser session and is not available via API key.
-
 ---
 
 ## Training API
 
-Launch YOLO training on cloud GPUs (24 GPU types from RTX 2000 Ada to B300) and monitor progress in real time. See [Cloud Training documentation](../train/cloud-training.md).
+Launch YOLO training on cloud GPUs (26 GPU types from RTX 2000 Ada to B300) and monitor progress in real time. See [Cloud Training documentation](../train/cloud-training.md).
 
 ```mermaid
 graph LR
-    A[POST /training/start] --> B[Job Created]
-    B --> C{Training}
-    C -->|progress| D[GET /models/id/training]
-    C -->|cancel| E[DELETE /models/id/training]
-    C -->|complete| F[Model Ready]
-    F --> G[Deploy or Export]
+    A[POST /training/start]:::start --> B[Job Created]:::proc
+    B --> C{Training}:::decide
+    C -->|progress| D[GET /models/id/training]:::proc
+    C -->|cancel| E[DELETE /models/id/training]:::error
+    C -->|complete| F[Model Ready]:::out
+    F --> G[Deploy or Export]:::proc
+
+    classDef start fill:#4CAF50,color:#fff
+    classDef proc fill:#2196F3,color:#fff
+    classDef decide fill:#FF9800,color:#fff
+    classDef out fill:#9C27B0,color:#fff
+    classDef error fill:#F44336,color:#fff
 ```
 
 ### Start Training
@@ -954,13 +1121,21 @@ POST /api/training/start
 
     Available GPU types include `rtx-4090`, `a100-80gb-pcie`, `a100-80gb-sxm`, `h100-sxm`, `rtx-pro-6000`, `b300`, and others. See [Cloud Training](../train/cloud-training.md) for the full list with pricing.
 
+### Get GPU Availability
+
+```http
+GET /api/training/gpu-availability
+```
+
+Returns current GPU stock status (`High`, `Medium`, `Low`, or `null`) keyed by GPU type ID. Public, no authentication required; cached for 5 minutes.
+
 ### Get Training Status
 
 ```http
 GET /api/models/{modelId}/training
 ```
 
-Returns the current training job status, metrics, and progress for a model. Public projects are accessible anonymously; private projects require an active platform browser session (this route does not accept API-key authentication).
+Returns the current training job status, metrics, progress, timing, GPU details, and errors. Public projects are accessible without authentication; private and shared projects require an API key with access.
 
 ### Cancel Training
 
@@ -968,7 +1143,7 @@ Returns the current training job status, metrics, and progress for a model. Publ
 DELETE /api/models/{modelId}/training
 ```
 
-Terminates the running compute instance and marks the job as cancelled. Requires an active platform browser session — not available via API key.
+Terminates the running compute instance and marks the job as cancelled.
 
 ---
 
@@ -978,17 +1153,23 @@ Deploy models to dedicated inference endpoints with health checks and monitoring
 
 !!! info "API-key support by route"
 
-    Only `GET /api/deployments`, `POST /api/deployments`, `GET /api/deployments/{deploymentId}`, and `DELETE /api/deployments/{deploymentId}` support API-key authentication. The `predict`, `health`, `logs`, `metrics`, `start`, and `stop` sub-routes require an active platform browser session — they are convenience proxies for the in-app UI. For programmatic inference, call the deployment's own endpoint URL (e.g., `https://predict-abc123.run.app/predict`) directly with your API key. [Dedicated endpoints](../deploy/endpoints.md#using-endpoints) are not rate-limited.
+    All deployment routes below accept API-key authentication. For high-throughput inference, call the deployment's own endpoint URL (e.g., `https://predict-abc123.run.app/predict`) directly with your API key. [Dedicated endpoints](../deploy/endpoints.md#using-endpoints) are not rate-limited.
 
 ```mermaid
 graph LR
-    A[Create] --> B[Deploying]
-    B --> C[Ready]
-    C -->|stop| D[Stopped]
+    A[Create]:::start --> B[Deploying]:::proc
+    B --> C[Ready]:::out
+    C -->|stop| D[Stopped]:::extern
     D -->|start| C
-    C -->|delete| E[Deleted]
+    C -->|delete| E[Deleted]:::error
     D -->|delete| E
-    C -->|predict| F[Inference Results]
+    C -->|predict| F[Inference Results]:::out
+
+    classDef start fill:#4CAF50,color:#fff
+    classDef proc fill:#2196F3,color:#fff
+    classDef out fill:#9C27B0,color:#fff
+    classDef error fill:#F44336,color:#fff
+    classDef extern fill:#607D8B,color:#fff
 ```
 
 ### List Deployments
@@ -1043,7 +1224,7 @@ Creates a dedicated inference endpoint in the specified region. The endpoint is 
 
 !!! tip "Region Selection"
 
-    Choose a region close to your users for lowest latency. The platform UI shows latency estimates for all 43 available regions.
+    Choose a region close to your users for lowest latency. The platform UI shows latency estimates for all 42 available regions.
 
 ### Get Deployment
 
@@ -1091,12 +1272,17 @@ Send an image directly to a deployment endpoint for inference. Functionally equi
 
 **Multipart Form:**
 
-| Field   | Type  | Description                          |
-| ------- | ----- | ------------------------------------ |
-| `file`  | file  | Image file (JPEG, PNG, WebP)         |
-| `conf`  | float | Confidence threshold (default: 0.25) |
-| `iou`   | float | IoU threshold (default: 0.7)         |
-| `imgsz` | int   | Image size in pixels (default: 640)  |
+| Field       | Type    | Description                                               |
+| ----------- | ------- | --------------------------------------------------------- |
+| `file`      | file    | Image or video file                                       |
+| `source`    | string  | Image URL or base64-encoded image (alternative to `file`) |
+| `conf`      | float   | Confidence threshold, 0.01–1 (default: 0.25)              |
+| `iou`       | float   | IoU threshold, 0–0.95 (default: 0.7)                      |
+| `imgsz`     | int     | Image size, 32–1280 pixels (default: 640)                 |
+| `normalize` | boolean | Return normalized coordinates (default: `false`)          |
+| `decimals`  | int     | Coordinate precision, 0–10 (default: 5)                   |
+
+Provide either `file` or `source`. The response uses the same image and metadata contract as model prediction and never returns the internal model path.
 
 ### Get Metrics
 
@@ -1129,25 +1315,9 @@ GET /api/deployments/{deploymentId}/logs
 
 ---
 
-## Monitoring API
-
-!!! note "Browser session only"
-
-    `GET /api/monitoring` is a UI-only route and requires an active platform browser session. It does not accept API-key authentication. Query individual deployment metrics via the per-deployment routes (which are also browser-session only) or use [Cloud Monitoring exports](https://cloud.google.com/monitoring) on the deployed Cloud Run service for programmatic access.
-
-### Aggregated Metrics
-
-```http
-GET /api/monitoring
-```
-
-Returns aggregated metrics across all user deployments: total requests, active deployments, error rate, and average latency.
-
----
-
 ## Export API
 
-Convert models to optimized formats like ONNX, TensorRT, CoreML, and TFLite for edge deployment. See [Deploy documentation](../deploy/index.md).
+Convert models to optimized formats like ONNX, TensorRT, CoreML, and LiteRT for edge deployment. See [Deploy documentation](../deploy/index.md).
 
 ### List Exports
 
@@ -1171,12 +1341,12 @@ POST /api/exports
 
 **Body:**
 
-| Field     | Type   | Required    | Description                                         |
-| --------- | ------ | ----------- | --------------------------------------------------- |
-| `modelId` | string | Yes         | Source model ID                                     |
-| `format`  | string | Yes         | Export format (see table below)                     |
-| `gpuType` | string | Conditional | Required when `format` is `engine` (TensorRT)       |
-| `args`    | object | No          | Export arguments (`imgsz`, `half`, `dynamic`, etc.) |
+| Field     | Type   | Required    | Description                                                                                                                   |
+| --------- | ------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `modelId` | string | Yes         | Source model ID                                                                                                               |
+| `format`  | string | Yes         | Export format (see table below)                                                                                               |
+| `gpuType` | string | Conditional | Required when `format` is `engine`; use a supported [GPU or Jetson target](../train/models.md#nvidia-jetson-tensorrt-targets) |
+| `args`    | object | No          | Export arguments (`imgsz`, `quantize`, `dynamic`, etc.)                                                                       |
 
 === "cURL"
 
@@ -1208,18 +1378,19 @@ POST /api/exports
 | OpenVINO      | `openvino`    | Intel hardware           |
 | TensorRT      | `engine`      | NVIDIA GPU optimization  |
 | CoreML        | `coreml`      | Apple devices            |
-| TFLite        | `tflite`      | Mobile and embedded      |
 | TF SavedModel | `saved_model` | TensorFlow Serving       |
 | TF GraphDef   | `pb`          | TensorFlow frozen graph  |
 | PaddlePaddle  | `paddle`      | Baidu PaddlePaddle       |
 | NCNN          | `ncnn`        | Mobile neural network    |
+| LiteRT        | `litert`      | Mobile/edge and browser  |
 | Edge TPU      | `edgetpu`     | Google Coral devices     |
-| TF.js         | `tfjs`        | Browser inference        |
 | MNN           | `mnn`         | Alibaba mobile inference |
 | RKNN          | `rknn`        | Rockchip NPU             |
+| Qualcomm      | `qnn`         | Qualcomm Snapdragon NPU  |
 | IMX           | `imx`         | Sony IMX500 sensor       |
 | Axelera       | `axelera`     | Axelera AI accelerators  |
 | ExecuTorch    | `executorch`  | Meta ExecuTorch runtime  |
+| DeepX         | `deepx`       | DeepX NPU accelerators   |
 
 ### Get Export Status
 
@@ -1245,9 +1416,9 @@ POST /api/exports/{exportId}/track-download
 
 View a feed of recent actions on your account — training runs, uploads, and more. See [Activity documentation](../account/activity.md).
 
-!!! note "Browser Session Only"
+!!! note "API-key support by route"
 
-    The Activity routes are powered by browser-authenticated requests from the platform UI. They are not exposed as a public API, do not accept API-key authentication, and the route shapes below are documented only for reference. Use the Activity feed in the platform UI to view, mark, or archive events.
+    All Activity routes below accept API-key authentication.
 
 ### List Activity
 
@@ -1263,6 +1434,10 @@ GET /api/activity
 | `page`     | int     | Page number (default: 1)                  |
 | `archived` | boolean | `true` for Archive tab, `false` for Inbox |
 | `search`   | string  | Case-insensitive search in event fields   |
+| `start`    | date    | Include events on or after this date      |
+| `end`      | date    | Include events on or before this date     |
+| `export`   | boolean | Return all matching events as JSON        |
+| `owner`    | string  | Workspace username                        |
 
 ### Mark Events Seen
 
@@ -1285,6 +1460,8 @@ Or pass specific IDs:
     "eventIds": ["EVENT_ID_1", "EVENT_ID_2"]
 }
 ```
+
+Pass the optional `owner` query parameter to mark events in a workspace.
 
 ### Archive Events
 
@@ -1309,6 +1486,8 @@ Or pass specific IDs:
     "archive": false
 }
 ```
+
+Pass the optional `owner` query parameter to archive or restore workspace events.
 
 ---
 
@@ -1375,13 +1554,13 @@ Permanently deletes all items in trash.
 
 !!! note "Authentication"
 
-    `DELETE /api/trash/empty` requires an authenticated browser session and is not available via API key. Use the **Empty Trash** button in the UI instead.
+    `DELETE /api/trash/empty` accepts API-key authentication and permanently deletes every item in the selected account or workspace trash.
 
 ---
 
 ## Billing API
 
-Check your credit balance, purchase credits, view transaction history, and configure auto top-up. See [Billing documentation](../account/billing.md).
+Check your credit balance, plan usage, and transaction history. See [Billing documentation](../account/billing.md).
 
 !!! note "Currency Units"
 
@@ -1404,11 +1583,7 @@ GET /api/billing/balance
 ```json
 {
     "creditsCents": 2500,
-    "plan": "free",
-    "cashBalance": 25,
-    "creditBalance": 0,
-    "reservedAmount": 0,
-    "totalBalance": 25
+    "plan": "free"
 }
 ```
 
@@ -1428,162 +1603,13 @@ GET /api/billing/transactions
 
 Returns transaction history (most recent first).
 
-**Query Parameters:**
-
-| Parameter | Type   | Description              |
-| --------- | ------ | ------------------------ |
-| `owner`   | string | Workspace owner username |
-
-### Create Checkout Session
-
-```http
-POST /api/billing/checkout-session
-```
-
-**Body:**
-
-```json
-{
-    "amount": 25,
-    "owner": "team-username"
-}
-```
-
-| Field    | Type   | Required | Description                                               |
-| -------- | ------ | -------- | --------------------------------------------------------- |
-| `amount` | number | Yes      | Amount in dollars ($5-$1000)                              |
-| `owner`  | string | No       | Team username for workspace top-ups (requires admin role) |
-
-Creates a checkout session for credit purchase.
-
-### Create Subscription Checkout
-
-```http
-POST /api/billing/subscription-checkout
-```
-
-Creates a checkout session for Pro subscription upgrade.
-
-**Body:**
-
-```json
-{
-    "planId": "pro",
-    "billingCycle": "monthly",
-    "owner": "team-username"
-}
-```
-
-| Field          | Type   | Required | Description                                                |
-| -------------- | ------ | -------- | ---------------------------------------------------------- |
-| `planId`       | string | Yes      | Plan to subscribe to (`pro`)                               |
-| `billingCycle` | string | No       | Billing cycle: `monthly` (default) or `yearly`             |
-| `owner`        | string | No       | Team username for workspace upgrades (requires admin role) |
-
-### Cancel or Resume Subscription
-
-```http
-DELETE /api/billing/subscription-checkout
-```
-
-Cancels a Pro subscription at period end by default. Send `{"resume": true}` to resume an already scheduled cancellation before the billing period ends.
-
-**Body:**
-
-```json
-{
-    "resume": true
-}
-```
-
-### Auto Top-Up
-
-Automatically add credits when balance falls below a threshold.
-
-#### Get Auto Top-Up Config
-
-```http
-GET /api/billing/auto-topup
-```
+Transactions include client-facing ledger fields such as amount, resulting balance, date, optional model context, and receipt URL. Internal notes, Stripe payment/refund IDs, and idempotency keys are not returned.
 
 **Query Parameters:**
 
 | Parameter | Type   | Description              |
 | --------- | ------ | ------------------------ |
 | `owner`   | string | Workspace owner username |
-
-#### Update Auto Top-Up Config
-
-```http
-PATCH /api/billing/auto-topup
-```
-
-**Body:**
-
-```json
-{
-    "enabled": true,
-    "thresholdCents": 500,
-    "amountCents": 2500
-}
-```
-
-### Payment Methods
-
-#### List Payment Methods
-
-```http
-GET /api/billing/payment-methods
-```
-
-#### Create Setup Intent
-
-```http
-POST /api/billing/payment-methods/setup
-```
-
-Returns a client secret for adding a new payment method.
-
-#### Set Default Payment Method
-
-```http
-POST /api/billing/payment-methods/default
-```
-
-**Body:**
-
-```json
-{
-    "paymentMethodId": "pm_123"
-}
-```
-
-#### Update Billing Info
-
-```http
-PATCH /api/billing/payment-methods
-```
-
-**Body:**
-
-```json
-{
-    "name": "Jane Doe",
-    "address": {
-        "line1": "123 Main St",
-        "city": "San Francisco",
-        "state": "CA",
-        "postal_code": "94105",
-        "country": "US"
-    }
-}
-```
-
-#### Delete Payment Method
-
-```http
-DELETE /api/billing/payment-methods/{id}
-```
 
 ---
 
@@ -1591,15 +1617,22 @@ DELETE /api/billing/payment-methods/{id}
 
 Check your storage usage breakdown by category (datasets, models, exports) and see your largest items.
 
-!!! note "Browser session only"
+!!! note "API-key access"
 
-    Storage routes require an active platform browser session and are not accessible via API key. Use the [Settings > Profile](../account/settings.md#storage-usage) page in the UI for interactive breakdowns.
+    `GET /api/storage` accepts API-key authentication. Use the [Settings > Profile](../account/settings.md#storage-usage) page for the same interactive breakdown.
 
 ### Get Storage Info
 
 ```http
 GET /api/storage
 ```
+
+**Query Parameters:**
+
+| Parameter | Type    | Description                                                              |
+| --------- | ------- | ------------------------------------------------------------------------ |
+| `details` | boolean | Set to `true` to include `topItems` (largest datasets, models, exports). |
+| `owner`   | string  | Workspace username.                                                      |
 
 **Response:**
 
@@ -1644,11 +1677,24 @@ GET /api/storage
 }
 ```
 
+### Cloud Storage Integrations
+
+Connect and browse read-only GCS, S3, or Azure Blob storage integrations:
+
+```http
+GET /api/integrations/buckets
+POST /api/integrations/buckets
+POST /api/integrations/buckets/discover
+GET /api/integrations/buckets/{id}/objects
+```
+
+All four operations accept the optional `owner` query parameter for a workspace. Object browsing also accepts required `target` plus optional `prefix` and provider `cursor` query parameters. Connection and discovery request bodies use the provider credential schemas in the interactive OpenAPI reference; credentials are never returned.
+
 ---
 
 ## Upload API
 
-Upload files directly to cloud storage using signed URLs for fast, reliable transfers. Uses a two-step flow: get a signed URL, then upload the file. See [Data documentation](../data/index.md).
+Upload files directly to cloud storage using signed URLs for fast, reliable transfers. Completing a model upload attaches its weights. Completing a dataset archive upload records the session; pass that `sessionId` to `POST /api/datasets/ingest` to start processing. See [Data documentation](../data/index.md).
 
 ### Get Signed Upload URL
 
@@ -1662,11 +1708,11 @@ Request a signed URL for uploading a file directly to cloud storage. The signed 
 
 ```json
 {
-    "assetType": "images",
-    "assetId": "abc123",
-    "filename": "my-image.jpg",
-    "contentType": "image/jpeg",
-    "totalBytes": 5242880
+    "assetType": "datasets",
+    "assetId": "dataset_abc123",
+    "filename": "my-dataset.zip",
+    "contentType": "application/zip",
+    "totalBytes": 52428800
 }
 ```
 
@@ -1684,8 +1730,6 @@ Request a signed URL for uploading a file directly to cloud storage. The signed 
 {
     "sessionId": "session_abc123",
     "uploadUrl": "https://storage.example.com/...",
-    "objectPath": "images/abc123/my-image.jpg",
-    "downloadUrl": "https://cdn.example.com/...",
     "expiresAt": "2026-02-22T12:00:00Z"
 }
 ```
@@ -1696,19 +1740,38 @@ Request a signed URL for uploading a file directly to cloud storage. The signed 
 POST /api/upload/complete
 ```
 
-Notify the platform that a file upload is complete so it can begin processing.
+Notify the platform that a file upload is complete. For models, this attaches the uploaded weights. For dataset archives, this verifies and records the upload session; call `POST /api/datasets/ingest` afterward to start dataset processing.
 
 **Body:**
 
 ```json
 {
-    "datasetId": "abc123",
-    "objectPath": "datasets/abc123/images/my-image.jpg",
-    "filename": "my-image.jpg",
-    "contentType": "image/jpeg",
-    "size": 5242880
+    "sessionId": "session_abc123",
+    "checksum": "<optional sha-256 hex>"
 }
 ```
+
+---
+
+## Integrations API
+
+Import datasets from third-party services. See [Integrations documentation](../integrations/index.md).
+
+### Preview Roboflow Import
+
+```http
+POST /api/integrations/roboflow/preview
+```
+
+Resolve a Roboflow API key to a bulk-import plan: workspace info, which projects would be newly imported, count of already-imported versions (skipped), and unsupported project types. The Roboflow API key is passed in the body and is not persisted.
+
+### Import from Roboflow
+
+```http
+POST /api/integrations/roboflow/import
+```
+
+Queue dataset ingest jobs to import the selected Roboflow projects into your workspace. Requires storage headroom, and each dataset must fit your plan's per-import size limit.
 
 ---
 
@@ -1721,6 +1784,10 @@ Manage your API keys for programmatic access. See [API Keys documentation](../ac
 ```http
 GET /api/api-keys
 ```
+
+API-key-authenticated clients receive key metadata, never decrypted existing key values. A newly created key is returned once by `POST /api/api-keys`.
+
+Pass the optional `owner` query parameter to manage keys for a workspace where you have editor access.
 
 ### Create API Key
 
@@ -1744,9 +1811,10 @@ DELETE /api/api-keys
 
 **Query Parameters:**
 
-| Parameter | Type   | Description          |
-| --------- | ------ | -------------------- |
-| `keyId`   | string | API key ID to revoke |
+| Parameter | Type   | Description                  |
+| --------- | ------ | ---------------------------- |
+| `keyId`   | string | API key ID to revoke         |
+| `owner`   | string | Optional workspace username. |
 
 **Example:**
 
@@ -1834,38 +1902,6 @@ DELETE /api/members/{userId}
 POST /api/members/transfer-ownership
 ```
 
-### Invites
-
-#### Accept Invite
-
-```http
-POST /api/invites/accept
-```
-
-#### Get Invite Info
-
-```http
-GET /api/invites/info
-```
-
-**Query Parameters:**
-
-| Parameter | Type   | Description  |
-| --------- | ------ | ------------ |
-| `token`   | string | Invite token |
-
-#### Revoke Invite
-
-```http
-DELETE /api/invites/{inviteId}
-```
-
-#### Resend Invite
-
-```http
-POST /api/invites/{inviteId}/resend
-```
-
 ---
 
 ## Explore API
@@ -1880,12 +1916,15 @@ GET /api/explore/search
 
 **Query Parameters:**
 
-| Parameter | Type   | Description                                                                                           |
-| --------- | ------ | ----------------------------------------------------------------------------------------------------- |
-| `q`       | string | Search query                                                                                          |
-| `type`    | string | Resource type: `all` (default), `projects`, `datasets`                                                |
-| `sort`    | string | Sort order: `stars` (default), `newest`, `oldest`, `name-asc`, `name-desc`, `count-desc`, `count-asc` |
-| `offset`  | int    | Pagination offset (default: 0). Results return 20 items per page.                                     |
+| Parameter | Type    | Description                                                                                                               |
+| --------- | ------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `q`       | string  | Search query                                                                                                              |
+| `type`    | string  | Resource type: `all` (default), `projects`, `datasets`                                                                    |
+| `sort`    | string  | Sort order: `newest` (default), `stars`, `oldest`, `name-asc`, `name-desc`, `count-desc`, `count-asc`                     |
+| `offset`  | int     | Pagination offset (default: 0). Results return 20 items per page.                                                         |
+| `task`    | string  | Optional: comma-separated YOLO task types to filter datasets (`detect`, `segment`, `semantic`, `classify`, `pose`, `obb`) |
+| `author`  | string  | Optional owner username filter.                                                                                           |
+| `starred` | boolean | Set `true` to return the authenticated caller's starred content; requires an API key.                                     |
 
 ### Sidebar Data
 
@@ -1899,7 +1938,15 @@ Returns curated content for the Explore sidebar.
 
 ## User & Settings APIs
 
-Manage your profile, API keys, storage usage, and data privacy settings. See [Settings documentation](../account/settings.md).
+Manage your profile, API keys, storage usage, and team workspaces. See [Settings documentation](../account/settings.md).
+
+### Account Summary
+
+```http
+GET /api/account/summary
+```
+
+Returns the authenticated account's plan, credit balance, resource counts, and team workspaces.
 
 ### Get User by Username
 
@@ -1950,77 +1997,14 @@ POST /api/settings
 
 Get or update user profile settings (display name, bio, social links, etc.).
 
-### Profile Icon
+### Workspace Icon
 
 ```http
 POST /api/settings/icon
 DELETE /api/settings/icon
 ```
 
-Upload or remove profile avatar.
-
-### Onboarding
-
-```http
-POST /api/onboarding
-```
-
-Complete onboarding flow (set data region, username).
-
----
-
-## GDPR API
-
-Request an export of all your data or permanently delete your account. See [Settings documentation](../account/settings.md).
-
-### Get GDPR Job Status
-
-```http
-GET /api/gdpr
-```
-
-**Query Parameters:**
-
-| Parameter | Type   | Description          |
-| --------- | ------ | -------------------- |
-| `jobId`   | string | GDPR job ID to check |
-
-Returns job status. For completed export jobs, response includes a `downloadUrl`.
-
-### Start Export or Delete Flow
-
-```http
-POST /api/gdpr
-```
-
-**Body:**
-
-```json
-{
-    "action": "export"
-}
-```
-
-```json
-{
-    "action": "delete",
-    "confirmationWord": "DELETE"
-}
-```
-
-Optional for team workspaces:
-
-```json
-{
-    "action": "delete",
-    "confirmationWord": "DELETE",
-    "teamUsername": "my-team"
-}
-```
-
-!!! warning "Irreversible Action"
-
-    Account deletion is permanent and cannot be undone. All data, models, and deployments will be deleted.
+Upload a WebP profile/workspace icon up to 5 MB as multipart form field `image`, or remove it. Pass optional `owner` for a team workspace.
 
 ---
 
@@ -2055,7 +2039,7 @@ yolo check
 
 !!! warning "Package Version Requirement"
 
-    Platform integration requires **ultralytics>=8.4.35**. Lower versions will NOT work with Platform.
+    Platform integration requires **ultralytics>=8.4.60**. Lower versions will NOT work with Platform.
 
 ### Authentication
 
@@ -2160,10 +2144,10 @@ for r in results:
 
 ```python
 # Export to ONNX
-model.export(format="onnx", imgsz=640, half=True)
+model.export(format="onnx", imgsz=640, quantize=16)
 
 # Export to TensorRT
-model.export(format="engine", imgsz=640, half=True)
+model.export(format="engine", imgsz=640, quantize=16)
 
 # Export to CoreML
 model.export(format="coreml", imgsz=640)
@@ -2177,18 +2161,6 @@ metrics = model.val(data="ul://username/datasets/my-dataset")
 print(f"mAP50: {metrics.box.map50}")
 print(f"mAP50-95: {metrics.box.map}")
 ```
-
----
-
-## Webhooks
-
-The Platform uses internal webhooks to stream real-time training metrics from the `ultralytics` Python SDK (running on cloud GPUs or remote/local machines) back to the Platform — epoch-by-epoch loss, mAP, system stats, and completion status. These webhooks are authenticated via the HMAC `webhookSecret` provisioned per training job and are not intended to be consumed by user applications.
-
-!!! info "Working on your side"
-
-    **All plans**: Training progress via the `ultralytics` SDK (real-time metrics, completion notifications) works automatically on every plan — just set `project=username/my-project name=my-run` when training and the SDK streams events back to the Platform. No user-side webhook registration is required.
-
-    **User-facing webhook subscriptions** (POST callbacks to a URL you control) are on the Enterprise roadmap and not currently available. In the meantime, poll `GET /api/models/{modelId}/training` for status or use the [activity feed](#activity-api) in the UI.
 
 ---
 
@@ -2218,7 +2190,7 @@ curl "https://platform.ultralytics.com/api/explore/search?type=datasets&offset=2
 
 ### Can I use the API without an SDK?
 
-Yes, all functionality is available via REST. The Python SDK is a convenience wrapper that adds features like real-time metric streaming and automatic model uploads. You can also explore all endpoints interactively at [platform.ultralytics.com/api/docs](https://platform.ultralytics.com/api/docs).
+The public REST operations documented above are available without the Python SDK. The SDK is a convenience wrapper that adds features like real-time metric streaming and automatic model uploads. You can explore the machine-readable contract interactively at [platform.ultralytics.com/api/docs](https://platform.ultralytics.com/api/docs); browser-session-only account flows remain in the Platform UI.
 
 ### Are there API client libraries?
 
@@ -2248,7 +2220,7 @@ def api_request_with_retry(url, headers, max_retries=3):
 
 Resource IDs are returned when you create resources via the API. You can also find them in the platform URL:
 
-```
+```text
 https://platform.ultralytics.com/username/project/model-name
                                   ^^^^^^^^ ^^^^^^^ ^^^^^^^^^^
                                   username project   model

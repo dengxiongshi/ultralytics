@@ -9,7 +9,7 @@ import tarfile
 from itertools import repeat
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
-from urllib import parse, request
+from urllib import parse
 
 from ultralytics.utils import ASSETS_URL, LOGGER, TQDM, checks, clean_url, emojis, is_online, url2file
 
@@ -65,8 +65,9 @@ def is_url(url: str | Path, check: bool = False) -> bool:
         if not (result.scheme and result.netloc):
             return False
         if check:
-            r = request.urlopen(request.Request(url, method="HEAD"), timeout=3)
-            return 200 <= r.getcode() < 400
+            import requests  # scoped as slow import
+
+            return requests.head(url, timeout=3, allow_redirects=True).ok
         return True
     except Exception:
         return False
@@ -325,10 +326,12 @@ def safe_download(
     if "://" not in url and Path(url).is_file():  # local file path ('://' check required in Windows Python<3.10)
         f = Path(url)
     else:
+        import requests  # scoped as slow import
+
         gdrive = url.startswith("https://drive.google.com/")  # check if the URL is a Google Drive link
         if gdrive:
             url, file = get_google_drive_file_info(url)
-        url = url.replace(" ", "%20")  # encode spaces for curl/urllib compatibility
+        url = url.replace(" ", "%20")  # encode spaces for curl compatibility
 
         f = Path(dir or ".") / (file or url2file(url))  # URL converted to filename
         if not f.is_file():  # URL and file do not exist
@@ -336,16 +339,17 @@ def safe_download(
             desc = f"Downloading {uri} to '{f}'"
             f.parent.mkdir(parents=True, exist_ok=True)  # make directory if missing
             curl_installed = shutil.which("curl")
+            expected_size = None  # set from Content-Length; reused to validate curl retries
             for i in range(retry + 1):
                 try:
                     if (curl or i > 0) and curl_installed:  # curl download with retry, continue
                         s = "sS" * (not progress)  # silent
                         r = subprocess.run(["curl", "-#", f"-{s}L", url, "-o", f, "--retry", "3", "-C", "-"]).returncode
                         assert r == 0, f"Curl return value {r}"
-                        expected_size = None  # Can't get size with curl
-                    else:  # urllib download
-                        with request.urlopen(url) as response:
-                            expected_size = int(response.getheader("Content-Length", 0))
+                    else:  # requests download
+                        with requests.get(url, stream=True, headers={"Accept-Encoding": "identity"}) as response:
+                            response.raise_for_status()
+                            expected_size = int(response.headers.get("Content-Length", 0))
                             if i == 0 and expected_size > 1048576:
                                 check_disk_space(expected_size, path=f.parent)
                             buffer_size = max(8192, min(1048576, expected_size // 1000)) if expected_size else 8192
@@ -358,10 +362,7 @@ def safe_download(
                                 unit_divisor=1024,
                             ) as pbar:
                                 with open(f, "wb") as f_opened:
-                                    while True:
-                                        data = response.read(buffer_size)
-                                        if not data:
-                                            break
+                                    for data in response.iter_content(chunk_size=buffer_size):
                                         f_opened.write(data)
                                         pbar.update(len(data))
 
@@ -449,9 +450,17 @@ def get_github_assets(
     if version != "latest":
         version = f"tags/{version}"  # i.e. tags/v6.2
     url = f"https://api.github.com/repos/{repo}/releases/{version}"
-    r = requests.get(url)  # github api
-    if r.status_code != 200 and r.reason != "rate limit exceeded" and retry:  # failed and not 403 rate limit exceeded
-        r = requests.get(url)  # try again
+    attempts = 2 if retry else 1  # retry once on transient network errors or non-200 responses
+    for attempt in range(attempts):
+        try:
+            r = requests.get(url, timeout=30)  # github api
+        except requests.exceptions.RequestException as e:
+            if attempt < attempts - 1:
+                continue  # transient network error, try again
+            LOGGER.warning(f"GitHub assets check failure for {url}: {e}")
+            return "", []
+        if r.status_code == 200 or r.reason == "rate limit exceeded":  # do not retry 403 rate limits
+            break
     if r.status_code != 200:
         LOGGER.warning(f"GitHub assets check failure for {url}: {r.status_code} {r.reason}")
         return "", []
@@ -539,7 +548,7 @@ def download(
         exist_ok (bool, optional): Whether to overwrite existing contents during unzipping.
 
     Examples:
-        >>> download("https://ultralytics.com/assets/example.zip", dir="path/to/dir", unzip=True)
+        >>> download("https://github.com/ultralytics/assets/releases/download/v0.0.0/bus.jpg", dir="path/to/dir")
     """
     dir = Path(dir)
     dir.mkdir(parents=True, exist_ok=True)  # make directory
