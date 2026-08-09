@@ -742,7 +742,8 @@ class BaseTrainer:
             # Task-specific dataset checking
             if self.args.task == "classify":
                 if getattr(self.args, "multi_label", False):
-                    data = check_multilabel_cls_dataset(self.args.data)
+                    # data = check_multilabel_cls_dataset(self.args.data)
+                    data = check_det_dataset(self.args.data)
                 else:
                     data = check_cls_dataset(self.args.data)
             elif str(self.args.data).rsplit(".", 1)[-1] in {"yaml", "yml"} or self.args.task in {

@@ -8,12 +8,13 @@ from typing import Any
 import torch
 
 from ultralytics.data import ClassificationDataset, MultiLabelClassificationDataset, build_dataloader
+from ultralytics.data.dataset import MultiLabelClassificationYOLODataset
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models import yolo
 from ultralytics.nn.tasks import ClassificationModel
-from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
+from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK, colorstr
 from ultralytics.utils.plotting import plot_images
-from ultralytics.utils.torch_utils import is_parallel, torch_distributed_zero_first
+from ultralytics.utils.torch_utils import is_parallel, torch_distributed_zero_first, unwrap_model
 
 
 class ClassificationTrainer(BaseTrainer):
@@ -135,14 +136,21 @@ class ClassificationTrainer(BaseTrainer):
             (ClassificationDataset | MultiLabelClassificationDataset): Dataset for the specified mode.
         """
         if getattr(self.args, "multi_label", False):
-            labels_file = self.data.get(f"{mode}_labels_file", self.data.get("train_labels_file", ""))
-            return MultiLabelClassificationDataset(
-                root=img_path,
+            # labels_file = self.data.get(f"{mode}_labels_file", self.data.get("train_labels_file", ""))
+            # return MultiLabelClassificationDataset(
+            #     root=img_path,
+            #     args=self.args,
+            #     augment=mode == "train",
+            #     prefix=mode,
+            #     nc=self.data["nc"],
+            #     labels_file=labels_file,
+            # )
+            return MultiLabelClassificationYOLODataset(
+                img_path=img_path,
                 args=self.args,
+                data=self.data,
                 augment=mode == "train",
                 prefix=mode,
-                nc=self.data["nc"],
-                labels_file=labels_file,
             )
         return ClassificationDataset(root=img_path, args=self.args, augment=mode == "train", prefix=mode)
 

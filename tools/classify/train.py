@@ -12,12 +12,12 @@ if platform.system() != 'Windows':
     ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 
-# import wandb
-# from ultralytics import settings
-#
-# wandb.login(key="fdb78e84a884b4d2f51a52025b9f59c806d5e2f3")
-# # wandb.init(project="coco")
-# settings.update({"wandb": True})
+import wandb
+from ultralytics import settings
+
+wandb.login(key="fdb78e84a884b4d2f51a52025b9f59c806d5e2f3")
+# wandb.init(project="coco")
+settings.update({"wandb": True})
 
 from ultralytics import YOLO
 

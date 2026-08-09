@@ -8,9 +8,10 @@ from typing import Any
 import torch
 import torch.distributed as dist
 
-from ultralytics.data import ClassificationDataset, MultiLabelClassificationDataset, build_dataloader
+from ultralytics.data import ClassificationDataset, MultiLabelClassificationDataset, build_dataloader, \
+    MultiLabelClassificationYOLODataset
 from ultralytics.engine.validator import BaseValidator
-from ultralytics.utils import LOGGER, RANK
+from ultralytics.utils import LOGGER, RANK, colorstr
 from ultralytics.utils.metrics import ClassifyMetrics, ConfusionMatrix, MultiLabelClassifyMetrics
 from ultralytics.utils.plotting import plot_images
 
@@ -167,14 +168,21 @@ class ClassificationValidator(BaseValidator):
         """Create a ClassificationDataset or MultiLabelClassificationDataset instance for validation."""
         if self.multi_label:
             split = self.args.split
-            labels_file = self.data.get(f"{split}_labels_file", self.data.get("train_labels_file", ""))
-            return MultiLabelClassificationDataset(
-                root=img_path,
+            # labels_file = self.data.get(f"{split}_labels_file", self.data.get("train_labels_file", ""))
+            # return MultiLabelClassificationDataset(
+            #     root=img_path,
+            #     args=self.args,
+            #     augment=False,
+            #     prefix=split,
+            #     nc=self.data["nc"],
+            #     labels_file=labels_file,
+            # )
+            return MultiLabelClassificationYOLODataset(
+                img_path=img_path,
                 args=self.args,
+                data=self.data,
                 augment=False,
-                prefix=split,
-                nc=self.data["nc"],
-                labels_file=labels_file,
+                prefix=split
             )
         return ClassificationDataset(root=img_path, args=self.args, augment=False, prefix=self.args.split)
 
