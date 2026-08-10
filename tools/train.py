@@ -12,38 +12,39 @@ if platform.system() != 'Windows':
     ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 
-# import wandb
-# from ultralytics import settings
-#
-# wandb.login(key="fdb78e84a884b4d2f51a52025b9f59c806d5e2f3")
-# # wandb.init(project="coco")
-# settings.update({"wandb": True})
+import wandb
+from ultralytics import settings
+
+wandb.login(key="fdb78e84a884b4d2f51a52025b9f59c806d5e2f3")
+# wandb.init(project="coco")
+settings.update({"wandb": True})
 
 from ultralytics import YOLO
 
 
-weight = "/mnt/d/python_work/ultralytics/weights/yolov8s-seg.pt"
-cfg = "/mnt/d/python_work/ultralytics/models/yolov8/segment/yolov8-seg.yaml"
+weight = r"G:\python_work\ultralytics\weights\yolov8s.pt"
+cfg = r"G:\python_work\ultralytics\models\yolov8s.yaml"
 # datasets = "/determined/alluxio/public/dengxiongshi/datasets/person_car/20250211/person_car.yaml"
-datasets = "/mnt/d/python_work/yolov5/datasets/coco128-seg/coco128-seg.yaml"
-epoch = 600
+datasets = r"G:\python_work\yolov5\datasets\coco128\coco.yaml"
+epoch = 20
 imgsz = 640
-batch_size = 1
+batch_size = 4
 device = [0]
-project = ROOT / "train/segment"
-name = "yolov8s-seg"
+project = "detect"
+name = "yolov8s"
 optimizer = "SGD"
+workers = 0
 
 # Add W&B callback for Ultralytics
 # add_wandb_callback(model, enable_model_checkpointing=True)
 
 
-model = YOLO(model=cfg, task="segment", verbose=True)
+model = YOLO(model=cfg, task="detect", verbose=True)
 model.load(weights=weight)
 
 
 results = model.train(data=datasets, epochs=epoch, patience=100, imgsz=imgsz, batch=batch_size, device=device,
-                      project=project, name=name, optimizer=optimizer, lr0=0.01, resume=False)
+                      project=project, name=name, optimizer=optimizer, lr0=0.01, workers=workers, resume=False)
 
 '''RESUME'''
 # weights = "/data/ultralytics/runs/train/detect/person_car/yolov8s_20250211/weights/last.pt"

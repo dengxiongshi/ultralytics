@@ -78,17 +78,19 @@ class PoseValidator(DetectionValidator):
 
     def get_desc(self) -> str:
         """Return description of evaluation metrics in string format."""
-        return ("%22s" + "%11s" * 10) % (
+        return ("%22s" + "%11s" * 12) % (
             "Class",
             "Images",
             "Instances",
             "Box(P",
             "R",
             "mAP50",
+            "mAP75",
             "mAP50-95)",
             "Pose(P",
             "R",
             "mAP50",
+            "mAP75",
             "mAP50-95)",
         )
 

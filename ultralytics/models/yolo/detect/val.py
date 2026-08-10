@@ -101,7 +101,7 @@ class DetectionValidator(BaseValidator):
 
     def get_desc(self) -> str:
         """Return a formatted string summarizing class metrics of YOLO model."""
-        return ("%22s" + "%11s" * 6) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP50-95)")
+        return ("%22s" + "%11s" * 7) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP75", "mAP50-95)")
 
     def postprocess(self, preds: torch.Tensor) -> list[dict[str, torch.Tensor]]:
         """Apply Non-maximum suppression to prediction outputs.
@@ -521,6 +521,7 @@ class DetectionValidator(BaseValidator):
 
                     # update mAP50-95 and mAP50
                     stats[f"metrics/mAP50({suffix[i][0]})"] = val.stats_as_dict["AP_50"]
+                    stats[f"metrics/mAP75({suffix[i][0]})"] = val.stats_as_dict["AP_75"]
                     stats[f"metrics/mAP50-95({suffix[i][0]})"] = val.stats_as_dict["AP_all"]
                     # record mAP for small, medium, large objects as well
                     stats["metrics/mAP_small(B)"] = val.stats_as_dict["AP_small"]

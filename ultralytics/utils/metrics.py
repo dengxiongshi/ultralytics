@@ -1294,6 +1294,15 @@ class Metric(SimpleClass):
         return self.all_ap[:, 0] if len(self.all_ap) else []
 
     @property
+    def ap75(self) -> np.ndarray | list:
+        """Return the Average Precision (AP) at an IoU threshold of 0.75 for all classes.
+
+        Returns:
+            (np.ndarray | list): Array of shape (nc,) with AP75 values per class, or an empty list if not available.
+        """
+        return self.all_ap[:, 5] if len(self.all_ap) else []
+
+    @property
     def ap(self) -> np.ndarray | list:
         """Return the Average Precision (AP) at an IoU threshold of 0.5-0.95 for all classes.
 
@@ -1348,12 +1357,12 @@ class Metric(SimpleClass):
         return self.all_ap.mean() if len(self.all_ap) else 0.0
 
     def mean_results(self) -> list[float]:
-        """Return mean of results, mp, mr, map50, map."""
-        return [self.mp, self.mr, self.map50, self.map]
+        """Return mean of results, mp, mr, map50, map75, map."""
+        return [self.mp, self.mr, self.map50, self.map75, self.map]
 
     def class_result(self, i: int) -> tuple[float, float, float, float]:
-        """Return class-aware result, p[i], r[i], ap50[i], ap[i]."""
-        return self.p[i], self.r[i], self.ap50[i], self.ap[i]
+        """Return class-aware result, p[i], r[i], ap50[i], ap75[i], ap[i]."""
+        return self.p[i], self.r[i], self.ap50[i], self.ap75[i], self.ap[i]
 
     @property
     def maps(self) -> np.ndarray:
@@ -1365,7 +1374,7 @@ class Metric(SimpleClass):
 
     def fitness(self) -> float:
         """Return model fitness as a weighted combination of metrics."""
-        w = [0.0, 0.0, 0.0, 1.0]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
+        w = [0.0, 0.0, 0.0, 0.0, 1.0]  # weights for [P, R, mAP@0.5, mAP@0.75 mAP@0.5:0.95]
         return float((np.nan_to_num(np.array(self.mean_results())) * w).sum())
 
     def update(self, results: tuple):
@@ -1546,7 +1555,7 @@ class DetMetrics(SimpleClass, DataExportMixin):
     @property
     def keys(self) -> list[str]:
         """Return a list of keys for accessing specific metrics."""
-        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)"]
+        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP75(B)", "metrics/mAP50-95(B)"]
 
     def mean_results(self) -> list[float]:
         """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95."""
@@ -1725,6 +1734,7 @@ class SegmentMetrics(DetMetrics):
             "metrics/precision(M)",
             "metrics/recall(M)",
             "metrics/mAP50(M)",
+            "metrics/mAP75(M)",
             "metrics/mAP50-95(M)",
         ]
         if self.iou:
@@ -1898,6 +1908,7 @@ class PoseMetrics(DetMetrics):
             "metrics/precision(P)",
             "metrics/recall(P)",
             "metrics/mAP50(P)",
+            "metrics/mAP75(P)",
             "metrics/mAP50-95(P)",
         ]
 

@@ -88,10 +88,12 @@ class SegmentationValidator(DetectionValidator):
             "Box(P",
             "R",
             "mAP50",
+            "mAP75",
             "mAP50-95)",
             "Mask(P",
             "R",
             "mAP50",
+            "mAP75",
             "mAP50-95",
             "mIoU" if self.use_miou else ")",
         ]
