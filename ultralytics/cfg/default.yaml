@@ -43,6 +43,7 @@ compile: False # (bool | str) enable torch.compile() backend='inductor'; True="d
 # Segmentation
 overlap_mask: True # (bool) merge instance masks into one mask during training (segment only)
 mask_ratio: 4 # (int) mask downsample ratio (segment only)
+mask_dice: False # (bool) compute Dice coefficient during segmentation validation
 
 # Classification
 dropout: 0.0 # (float) dropout for classification head (classify only)

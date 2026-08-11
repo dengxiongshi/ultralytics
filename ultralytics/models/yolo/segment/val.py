@@ -46,7 +46,7 @@ class SegmentationValidator(DetectionValidator):
         super().__init__(dataloader, save_dir, args, _callbacks)
         self.process = None
         self.args.task = "segment"
-        self.metrics = SegmentMetrics()
+        self.metrics = SegmentMetrics(compute_dice=self.args.mask_dice)
         self.use_miou = True
         self.use_dice = True
 
