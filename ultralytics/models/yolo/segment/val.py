@@ -46,9 +46,11 @@ class SegmentationValidator(DetectionValidator):
         super().__init__(dataloader, save_dir, args, _callbacks)
         self.process = None
         self.args.task = "segment"
-        self.metrics = SegmentMetrics(compute_dice=self.args.mask_dice)
-        self.use_miou = True
-        self.use_dice = True
+        use_miou = getattr(self.args, "use_miou", False)
+        use_dice = getattr(self.args, "use_dice", False)
+        self.metrics = SegmentMetrics(compute_dice=use_dice, compute_miou=use_miou)
+        self.use_miou = use_miou
+        self.use_dice = use_dice
 
     def preprocess(self, batch: dict[str, Any]) -> dict[str, Any]:
         """Preprocess batch of images for YOLO segmentation validation.
@@ -76,7 +78,7 @@ class SegmentationValidator(DetectionValidator):
         self.process = ops.process_mask_native if self.args.save_json or self.args.save_txt else ops.process_mask
 
         # reset mIoU and dice metrics
-        self.area = torch.zeros((2, self.nc), dtype=torch.float32, device=self.device)
+        self.miou_area = torch.zeros((2, self.nc), dtype=torch.float32, device=self.device)
         self.dice_area = torch.zeros((2, self.nc), dtype=torch.float32, device=self.device)
 
     def get_desc(self) -> str:
@@ -150,7 +152,7 @@ class SegmentationValidator(DetectionValidator):
     def gather_stats(self) -> None:
         """Gather stats from all GPUs."""
         if self.use_miou:
-            self.metrics.iou = (self.area[0] / self.area[1]).tolist()
+            self.metrics.iou = (self.miou_area[0] / self.miou_area[1]).tolist()
         if self.use_dice:
             self.metrics.dice = (self.dice_area[0] * 2 / self.dice_area[1]).tolist()
         super().gather_stats()  # gather stats from DetectionValidator
@@ -187,9 +189,10 @@ class SegmentationValidator(DetectionValidator):
                 pred_cls = preds["cls"]
                 gt_masks = batch["masks"]
                 pred_masks = preds["masks"]
+                device = gt_masks.device
                 h, w = gt_masks.shape[1:]
-                gt_masks_cls = torch.full((h, w), 255, dtype=gt_masks.dtype, device=gt_masks.device)
-                pred_masks_cls = torch.full((h, w), 255, dtype=gt_masks.dtype, device=gt_masks.device)
+                gt_masks_cls = torch.full((h, w), 255, dtype=gt_masks.dtype, device=device)
+                pred_masks_cls = torch.full((h, w), 255, dtype=gt_masks.dtype, device=device)
                 for i, c in enumerate(gt_cls):
                     gt_masks_cls[gt_masks[i].bool()] = c
 
@@ -199,15 +202,32 @@ class SegmentationValidator(DetectionValidator):
                     pred_masks_cls[pred_masks[i].bool()] = c
 
                 mask = gt_masks_cls != 255
-                pred_masks_cls, gt_masks_cls = pred_masks_cls[mask], gt_masks_cls[mask]
+                pred_pixels = pred_masks_cls[mask]
+                gt_pixels = gt_masks_cls[mask]
 
-                inter = pred_masks_cls[pred_masks_cls == gt_masks_cls]
-                inter_area = torch.histc(inter, bins=self.nc, min=0, max=self.nc - 1) if len(inter) else 0
-                pred_area = torch.histc(pred_masks_cls, bins=self.nc, min=0, max=self.nc - 1)
-                gt_area = torch.histc(gt_masks_cls, bins=self.nc, min=0, max=self.nc - 1)
+                # 交集像素：预测类别 == gt类别
+                inter_pixels = pred_pixels[pred_pixels == gt_pixels]
+                # pred_masks_cls, gt_masks_cls = pred_masks_cls[mask], gt_masks_cls[mask]
+                # inter = pred_masks_cls[pred_masks_cls == gt_masks_cls]
+                # inter_area = torch.histc(inter, bins=self.nc, min=0, max=self.nc - 1) if len(inter) else 0
+                # pred_area = torch.histc(pred_masks_cls, bins=self.nc, min=0, max=self.nc - 1)
+                # gt_area = torch.histc(gt_masks_cls, bins=self.nc, min=0, max=self.nc - 1)
+
+                def _safe_class_count(x: torch.Tensor, num_cls: int) -> torch.Tensor:
+                    """等价于 torch.histc(x, bins=num_cls, min=0, max=num_cls-1)，无确定性警告"""
+                    x_long = x.long()
+                    # 仅统计合法类别范围内的像素，和 histc 区间外忽略的行为完全一致
+                    range_mask = (x_long >= 0) & (x_long < num_cls)
+                    count = torch.bincount(x_long[range_mask], minlength=num_cls)[:num_cls]
+                    return count.float()  # 和 histc 返回类型保持一致
+
+                pred_area = _safe_class_count(pred_pixels, self.nc)
+                gt_area = _safe_class_count(gt_pixels, self.nc)
+                inter_area = _safe_class_count(inter_pixels, self.nc) if len(inter_pixels) > 0 else torch.zeros(self.nc, device=device)
+
                 union_area = pred_area + gt_area
-                self.area[0] += inter_area
-                self.area[1] += union_area - inter_area
+                self.miou_area[0] += inter_area
+                self.miou_area[1] += union_area - inter_area
 
                 self.dice_area[0] += inter_area + 1e-7
                 self.dice_area[1] += union_area + 1e-7
@@ -215,7 +235,8 @@ class SegmentationValidator(DetectionValidator):
         tp.update({"tp_m": tp_m})  # update tp with mask IoU
         return tp
 
-    def _mask_stats(self, pred_masks: torch.Tensor, gt_masks: torch.Tensor, eps: float = 1e-7, compute_dice: bool = True) -> tuple[float, float]:
+    def _mask_stats(self, pred_masks: torch.Tensor, gt_masks: torch.Tensor, eps: float = 1e-7, compute_dice: bool = False,
+                    compute_miou: bool = False) -> tuple[float, float]:
         """Compute mIoU and Dice coefficient for union masks in an image."""
         pred_empty = pred_masks.numel() == 0
         gt_empty = gt_masks.numel() == 0
@@ -242,11 +263,12 @@ class SegmentationValidator(DetectionValidator):
         if pred_sum == 0 and gt_sum == 0:
             return 1.0, 1.0
 
-        mask_iou_value = mask_iou(gt_union.view(1, -1).float(), pred_union.view(1, -1).float(), eps=eps).item()
+        iou_value, dice_value = 0.0, 0.0
+        if compute_miou:
+            iou_value = mask_iou(gt_union.view(1, -1).float(), pred_union.view(1, -1).float(), eps=eps).item()
         if compute_dice:
-            dice_value = (2 * intersection + eps) / (pred_sum + gt_sum + eps)
-            return float(mask_iou_value), float(dice_value.item())
-        return float(mask_iou_value), 0.0
+            dice_value = ((2 * intersection + eps) / (pred_sum + gt_sum + eps)).item()
+        return iou_value, dice_value
 
     def update_metrics(self, preds: list[dict[str, torch.Tensor]], batch: dict[str, Any]) -> None:
         """Update metrics with new predictions and ground truth, including mask Dice/mIoU."""
@@ -257,9 +279,9 @@ class SegmentationValidator(DetectionValidator):
 
             cls = pbatch["cls"].cpu().numpy()
             no_pred = predn["cls"].shape[0] == 0
-            # mask_iou_value, mask_dice_value = self._mask_stats(
-            #     predn["masks"], pbatch["masks"], compute_dice=self.use_dice
-            # )
+            mask_iou_value, mask_dice_value = self._mask_stats(
+                predn["masks"], pbatch["masks"], compute_dice=self.use_dice, compute_miou=self.use_miou
+            )
             self.metrics.update_stats(
                 {
                     **self._process_batch(predn, pbatch),
@@ -267,8 +289,9 @@ class SegmentationValidator(DetectionValidator):
                     "target_img": np.unique(cls),
                     "conf": np.zeros(0) if no_pred else predn["conf"].cpu().numpy(),
                     "pred_cls": np.zeros(0) if no_pred else predn["cls"].cpu().numpy(),
-                    # "mask_iou": np.array([mask_iou_value], dtype=np.float32),
-                    # "mask_dice": np.array([mask_dice_value], dtype=np.float32),
+                    "im_name": Path(pbatch["im_file"]).name,
+                    "mask_iou": np.array([mask_iou_value], dtype=np.float32),
+                    "mask_dice": np.array([mask_dice_value], dtype=np.float32),
                 }
             )
             # Evaluate

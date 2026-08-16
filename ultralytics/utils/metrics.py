@@ -1657,21 +1657,23 @@ class SegmentMetrics(DetMetrics):
         summary: Generate a summarized representation of per-class segmentation metrics as a list of dictionaries.
     """
 
-    def __init__(self, names: dict[int, str] = {}, compute_dice: bool = True) -> None:
+    def __init__(self, names: dict[int, str] = {}, compute_dice: bool = False, compute_miou: bool = False) -> None:
         """Initialize a SegmentMetrics instance with class names.
 
         Args:
             names (dict[int, str], optional): Dictionary of class names.
             compute_dice (bool, optional): Whether to compute Dice coefficient for masks.
+            compute_miou (bool, optional): Whether to compute mIoU for masks.
         """
         DetMetrics.__init__(self, names)
         self.seg = Metric()
         self.stats["tp_m"] = []  # add additional stats for masks
-        # self.stats["mask_iou"] = []
-        # self.stats["mask_dice"] = []
+        self.stats["mask_dice"] = []  # per-instance dice scores
+        self.stats["mask_iou"] = []  # per-instance mask IoU scores
         self.compute_dice = compute_dice
-        self.mask_iou = 0.0
-        self.mask_dice = 0.0
+        self.compute_miou = compute_miou
+        # self.mask_iou = 0.0
+        # self.mask_dice = 0.0
         self.iou = None  # init miou list
         self.dice = None
 
@@ -1720,10 +1722,10 @@ class SegmentMetrics(DetMetrics):
         if self.dice:
             self.dice = [self.dice[i] for i in self.ap_class_index]
 
-        if "mask_iou" in stats:
-            self.mask_iou = float(stats["mask_iou"].mean()) if stats["mask_iou"].size else 0.0
-        if self.compute_dice and "mask_dice" in stats:
-            self.mask_dice = float(stats["mask_dice"].mean()) if stats["mask_dice"].size else 0.0
+        # if self.compute_miou and "mask_iou" in stats:
+        #     self.mask_iou = float(stats["mask_iou"].mean()) if stats["mask_iou"].size else 0.0
+        # if self.compute_dice and "mask_dice" in stats:
+        #     self.mask_dice = float(stats["mask_dice"].mean()) if stats["mask_dice"].size else 0.0
         return stats
 
     @property
@@ -1737,27 +1739,27 @@ class SegmentMetrics(DetMetrics):
             "metrics/mAP75(M)",
             "metrics/mAP50-95(M)",
         ]
-        if self.iou:
+        if self.compute_miou:
             keys.append("metrics/mIoU(M)")
-        if self.dice:
+        if self.compute_dice:
             keys.append("metrics/dice(M)")
         return keys
 
     def mean_results(self) -> list[float]:
         """Return the mean metrics for bounding box and segmentation results."""
         results = DetMetrics.mean_results(self) + self.seg.mean_results()
-        if self.iou:
+        if self.compute_miou:
             results.append(self.mIoU)
-        if self.dice:
+        if self.compute_dice:
             results.append(self.mdice)
         return results
 
     def class_result(self, i: int) -> list[float]:
         """Return classification results for a specified class index."""
         results = list(DetMetrics.class_result(self, i)) + list(self.seg.class_result(i))
-        if self.iou:
+        if self.compute_miou:
             results.append(self.iou[i])
-        if self.dice:
+        if self.compute_dice:
             results.append(self.dice[i])
         return results
 
