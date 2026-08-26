@@ -18,8 +18,8 @@ from ultralytics.nn.tasks import DetectionModel
 
 from ultralytics import YOLO
 
-weight = "/mnt/d/python_work/ultralytics/weights/yolo26s-seg.pt"
-source = "/mnt/d/python_work/ultralytics/ultralytics/assets/zidane.jpg"
+weight = r"D:\python_work\ultralytics\weights\yolo26s-seg.pt"
+source = r"D:\python_work\ultralytics\ultralytics\assets\zidane.jpg"
 imgsz = 640
 device = 0
 project = ROOT / "runs/test"

@@ -12,6 +12,9 @@ if platform.system() != 'Windows':
     ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 
+# from pybaseutils import font_utils
+# font_utils.set_pyplot_font(font="SimHei")
+
 import wandb
 from ultralytics import settings, YOLO
 
@@ -20,17 +23,17 @@ wandb.login(key="fdb78e84a884b4d2f51a52025b9f59c806d5e2f3")
 # wandb.init(project="coco")
 
 
-weight = r"D:\python_work\ultralytics\runs\detect\fish\yolov8n\weights\best.pt"
-cfg = ROOT / "models/yolov8n.yaml"
+weight = r"D:\python_work\ultralytics\weights\yolov8s.pt"
+cfg = r"D:\python_work\ultralytics\models\yolov8s.yaml"
 # datasets = "/determined/alluxio/public/dengxiongshi/datasets/person_car/20250211/person_car.yaml"
-datasets = r"H:\datasets\train_data\dataset.yaml"
-epoch = 10
+datasets = r"D:\python_work\yolov5\datasets\coco128\coco.yaml"
+epoch = 20
 imgsz = 640
-batch_size = 8
+batch_size = 4
 device = [0]
 # project = ROOT / "runs/train/detect"
-project = "fish"
-name = "yolov8n_chinese"
+project = "test"
+name = "yolov8s_chinese"
 optimizer = "SGD"
 workers = 0
 

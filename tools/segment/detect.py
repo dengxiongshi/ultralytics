@@ -63,7 +63,7 @@ from ultralytics.utils.torch_utils import smart_inference_mode, select_device, s
 
 @smart_inference_mode()
 def run(
-weights=ROOT / "yolov5s-seg.pt",  # model.pt path(s)
+    weights=ROOT / "yolov5s-seg.pt",  # model.pt path(s)
     source=ROOT / "data/images",  # file/dir/URL/glob/screen/0(webcam)
     data=ROOT / "data/coco128.yaml",  # dataset.yaml path
     imgsz=(640, 640),  # inference size (height, width)

@@ -17,18 +17,19 @@ from ultralytics.nn.tasks import DetectionModel
 
 from ultralytics import YOLO
 
-weight = "/data/ultralytics/weights/yolov8s-seg.pt"
-datasets = "/data/yolov5/datasets/coco128-seg/coco128-seg.yaml"
-batch_size = 2
-device = 0
-split = "val"  # Determines the dataset split to use for validation (val, test, or train)
-project = ROOT / "runs/val/person_car"
-name = "yolov8s-seg"
+weight = "/home/dxs/snap/ultralytics/runs/detect/fish/yolov8n/weights/best.pt"
+datasets = "/home/dxs/snap/train_data/dataset.yaml"
+batch_size = 64
+device = "0"
+split = "test"  # Determines the dataset split to use for validation (val, test, or train)
+project = "fish"
+name = "yolov8n"
+workers = 0
 
 model = YOLO(model=weight)
 
 results = model.val(data=datasets, imgsz=640, batch=batch_size, conf=0.001, iou=0.6, device=device, split=split,
-                    project=project, name=name)
+                    project=project, name=name, workers=workers)
 
 # Evaluate model performance on the validation set
 # metrics = model.val()
