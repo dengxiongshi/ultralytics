@@ -128,12 +128,16 @@ def copy_or_create_xml(folder_list: list[str], search_root: str):
 def main():
     # 配置区自行修改
     path_list = [
-        r"H:\datasets\Basic_Single_Fish\T13\D1\S0\A0\W0\L3\20260610_F3",
-        r"H:\datasets\Basic_Single_Fish\T13\D1\S0\A0\W0\L3\20260611_F3F50",
-        r"H:\datasets\Basic_Single_Fish\T13\D1\S0\A0\W0\L4\20260610_F3",
-        r"H:\datasets\Basic_Single_Fish\T13\D1\S0\A0\W0\L4\20260611_F3F50"
+        r"H:\datasets\Basic_Single_Fish\T07\D1\S0\A0\W0\L1\20260721_F46",
+        r"H:\datasets\Basic_Single_Fish\T07\D1\S0\A0\W0\L2\20260721_F46",
+        r"H:\datasets\Basic_Single_Fish\T07\D1\S0\A0\W0\L3\20260721_F46",
+        r"H:\datasets\Basic_Single_Fish\T07\D1\S0\A0\W0\L4\20260721_F46",
+        r"H:\datasets\Basic_Single_Fish\T07\D1\S0\A0\W0\L5\20260721_F46",
+        r"H:\datasets\Basic_Single_Fish\T07\D1\S0\A0\W0\L6\20260721_F46",
+        r"H:\datasets\Basic_Single_Fish\T07\D1\S0\A0\W0\L7\20260721_F46",
+        r"H:\datasets\Basic_Single_Fish\T07\D1\S0\A0\W0\L8\20260721_F46"
     ]
-    xml_search_dir = r"H:\datasets\Basic_Single_Fish\T13\D1\S0\A0\W0\F3F50\Annotations"  # 存放原始标注xml的总目录
+    xml_search_dir = r"H:\datasets\Basic_Single_Fish\T07\D1\S0\A0\W0\F46\Annotations"  # 存放原始标注xml的总目录
 
     copy_or_create_xml(path_list, xml_search_dir)
 

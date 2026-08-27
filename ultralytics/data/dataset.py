@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import glob
 import json
+import math
+import os
 from collections import defaultdict
 from itertools import repeat
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
+import random
 from typing import Any
 
 import cv2
@@ -15,7 +19,7 @@ import torch
 from PIL import Image
 from torch.utils.data import ConcatDataset
 
-from ultralytics.utils import LOCAL_RANK, LOGGER, NUM_THREADS, TQDM, colorstr
+from ultralytics.utils import LOCAL_RANK, LOGGER, NUM_THREADS, TQDM, colorstr, imread
 from ultralytics.utils.instance import Instances
 from ultralytics.utils.ops import resample_segments, segments2boxes
 from ultralytics.utils.torch_utils import TORCHVISION_0_18
@@ -34,6 +38,7 @@ from .base import BaseDataset
 from .converter import merge_multi_segment
 from .utils import (
     HELP_URL,
+    IMG_FORMATS,
     check_file_speeds,
     get_hash,
     img2label_paths,
@@ -42,7 +47,7 @@ from .utils import (
     save_dataset_cache_file,
     verify_image,
     verify_image_label,
-    verify_image_mask,
+    verify_image_mask, check_image, FORMATS_HELP_MSG,
 )
 
 # Ultralytics dataset *.cache version, >= 1.0.0 for Ultralytics YOLO models
@@ -150,6 +155,8 @@ class YOLODataset(BaseDataset):
         if msgs:
             LOGGER.info("\n".join(msgs))
         if nf == 0:
+            if self.augment:  # training requires labels; unlabeled val splits (e.g. COCO test-dev) only warn
+                raise ValueError(f"{self.prefix}No labels found in {path}. {HELP_URL}")
             LOGGER.warning(f"{self.prefix}No labels found in {path}. {HELP_URL}")
         x["hash"] = get_hash(self.label_files + self.im_files)
         x["results"] = nf, nm, ne, nc, len(self.im_files)
@@ -194,6 +201,11 @@ class YOLODataset(BaseDataset):
         # Check if the dataset is all boxes or all segments
         lengths = ((len(lb["cls"]), len(lb["bboxes"]), len(lb["segments"])) for lb in labels)
         len_cls, len_boxes, len_segments = (sum(x) for x in zip(*lengths))
+        if self.use_segments and len_boxes != len_segments:
+            raise ValueError(
+                f"Segment dataset requires equal numbers of boxes and segments, but got len(segments) = "
+                f"{len_segments}, len(boxes) = {len_boxes}. Please supply a segment dataset, not a detect dataset."
+            )
         if len_segments and len_boxes != len_segments:
             LOGGER.warning(
                 f"Box and segment counts should be equal, but got len(segments) = {len_segments}, "
@@ -694,6 +706,7 @@ class SemanticDataset(YOLODataset):
     Attributes:
         data (dict): Dataset configuration from YAML.
         mask_files (list[str]): List of mask file paths corresponding to images.
+        include_class (np.ndarray | None): Class ids to keep per pixel (None keeps all).
     """
 
     def __init__(self, *args, data: dict | None = None, **kwargs):
@@ -707,7 +720,28 @@ class SemanticDataset(YOLODataset):
         self.data = data or {}
         self.label_mapping = self._parse_label_mapping(self.data.get("label_mapping"))
         self.mask_files = []
+        self.include_class = None
         super().__init__(*args, data=data, **kwargs)
+
+    def update_labels(self, include_class: list[int] | None) -> None:
+        """Update labels to include only specified classes.
+
+        Args:
+            include_class (list[int], optional): List of classes to include. If None, all classes are included.
+        """
+        if self.single_cls:
+            raise NotImplementedError(
+                "'single_cls=True' is not supported for semantic segmentation: it forces a single-channel "
+                "model but cannot collapse multi-class masks. Use a dataset with 'nc: 1' for binary "
+                "(foreground/background) segmentation instead."
+            )
+        self.include_class = None if include_class is None else np.asarray(include_class, dtype=np.int32).reshape(-1)
+        if self.include_class is not None and int(self.data.get("nc", 0)) == 1:
+            LOGGER.warning(
+                "'classes' filtering is ignored for single-class (binary) semantic segmentation: keeping only "
+                "the sole class would discard all background supervision."
+            )
+            self.include_class = None
 
     def _parse_label_mapping(self, mapping):
         """Normalize label_mapping entries from dataset YAML into integer-to-integer ids."""
@@ -880,6 +914,8 @@ class SemanticDataset(YOLODataset):
         label = super().get_image_and_label(index)
         h, w = label["img"].shape[:2]
         mask = self.load_mask(index, image_shape=(h, w))
+        if self.include_class is not None:  # keep only selected classes; remap the rest to the ignore label
+            mask[~np.isin(mask, self.include_class)] = 255
         # Resize mask to match the resized image dimensions
         if mask.shape[:2] != (h, w):
             mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
@@ -955,11 +991,15 @@ class ClassificationDataset:
         torch_transforms (callable): PyTorch transforms to be applied to the images.
         root (str): Root directory of the dataset.
         prefix (str): Prefix for logging and cache filenames.
+        img_cache (np.ndarray): Contiguous uint8 buffer holding all cached images when caching in RAM.
+        img_offsets (np.ndarray): Flat offset of each image within img_cache.
+        img_shapes (list): (h, w, c) shape of each cached image.
 
     Methods:
         __getitem__: Return transformed image and class index for the given sample index.
         __len__: Return the total number of samples in the dataset.
         verify_images: Verify all images in dataset.
+        cache_images: Decode all images once into a single contiguous RAM buffer.
     """
 
     def __init__(self, root: str, args, augment: bool = False, prefix: str = ""):
@@ -979,6 +1019,7 @@ class ClassificationDataset:
             self.base = torchvision.datasets.ImageFolder(root=root, allow_empty=True)
         else:
             self.base = torchvision.datasets.ImageFolder(root=root)
+        is_ndjson = (Path(root).parent / ".ndjson.yaml").is_file()
         self.samples = self.base.samples
         self.root = self.base.root
 
@@ -987,15 +1028,15 @@ class ClassificationDataset:
             self.samples = self.samples[: round(len(self.samples) * args.fraction)]
         self.prefix = colorstr(f"{prefix}: ") if prefix else ""
         self.cache_ram = args.cache is True or str(args.cache).lower() == "ram"  # cache images into RAM
-        if self.cache_ram:
-            LOGGER.warning(
-                "Classification `cache_ram` training has known memory leak in "
-                "https://github.com/ultralytics/ultralytics/issues/9824, setting `cache_ram=False`."
-            )
-            self.cache_ram = False
         self.cache_disk = str(args.cache).lower() == "disk"  # cache images on hard drive as uncompressed *.npy files
         self.samples = self.verify_images()  # filter out bad images
+        if is_ndjson:
+            self.samples = [(f, int(Path(f).parent.name)) for f, _ in self.samples]
+        if args.single_cls:
+            self.samples = [(f, 0) for f, _ in self.samples]
         self.samples = [[*list(x), Path(x[0]).with_suffix(".npy"), None] for x in self.samples]  # file, index, npy, im
+        if self.cache_ram:
+            self.cache_images()
         scale = (1.0 - args.scale, 1.0)  # (0.08, 1.0)
         self.torch_transforms = (
             classify_augmentations(
@@ -1024,8 +1065,9 @@ class ClassificationDataset:
         """
         f, j, fn, im = self.samples[i]  # filename, index, filename.with_suffix('.npy'), image
         if self.cache_ram:
-            if im is None:  # Warning: two separate if statements required here, do not combine this with previous line
-                im = self.samples[i][3] = cv2.imread(f)
+            h, w, c = self.img_shapes[i]
+            pos = self.img_offsets[i]
+            im = self.img_cache[pos : pos + h * w * c].reshape(h, w, c)  # zero-copy view
         elif self.cache_disk:
             if not fn.exists():  # load npy
                 np.save(fn.as_posix(), cv2.imread(f), allow_pickle=False)
@@ -1041,6 +1083,26 @@ class ClassificationDataset:
         """Return the total number of samples in the dataset."""
         return len(self.samples)
 
+    def cache_images(self) -> None:
+        """Decode all images once into a single contiguous uint8 buffer before DataLoader workers fork.
+
+        A Python list of per-image arrays is duplicated into every forked worker by copy-on-write refcounting
+        (https://github.com/ultralytics/ultralytics/issues/9824); one shared numpy buffer is read-only across
+        workers instead, so RAM stays flat. Original image sizes are preserved for the transforms.
+        """
+        with ThreadPool(NUM_THREADS) as pool:
+            ims = list(
+                TQDM(
+                    pool.imap(lambda s: cv2.imread(s[0]), self.samples),
+                    total=len(self.samples),
+                    desc=f"{self.prefix}Caching images",
+                    disable=LOCAL_RANK > 0,
+                )
+            )
+        self.img_shapes = [im.shape for im in ims]
+        self.img_offsets = np.cumsum([0] + [im.size for im in ims[:-1]])
+        self.img_cache = np.concatenate([im.reshape(-1) for im in ims])
+
     def verify_images(self) -> list[tuple]:
         """Verify all images in dataset.
 
@@ -1055,7 +1117,7 @@ class ClassificationDataset:
             cache = load_dataset_cache_file(path)  # attempt to load a *.cache file
             assert cache["version"] == DATASET_CACHE_VERSION  # matches current version
             assert cache["hash"] == get_hash([x[0] for x in self.samples])  # identical hash
-            nf, nc, n, samples = cache.pop("results")  # found, missing, empty, corrupt, total
+            nf, nc, n, samples = cache.pop("results")  # found, corrupt, total, samples
             if LOCAL_RANK in {-1, 0}:
                 d = f"{desc} {nf} images, {nc} corrupt"
                 TQDM(None, desc=d, total=n, initial=n)
@@ -1086,3 +1148,702 @@ class ClassificationDataset:
             x["msgs"] = msgs  # warnings
             save_dataset_cache_file(self.prefix, path, x, DATASET_CACHE_VERSION)
             return samples
+
+
+class MultiLabelClassificationDataset:
+    """Dataset class for multi-label image classification tasks.
+
+    Loads images and their multi-label targets from a CSV file where each row maps an image path to one or more
+    class indices. Returns multi-hot encoded label vectors for use with BCEWithLogitsLoss.
+
+    Attributes:
+        nc (int): Number of classes.
+        samples (list): List of [image_path, class_indices_list, npy_cache_path, cached_image] entries.
+        torch_transforms (callable): PyTorch transforms applied to images.
+        root (str): Root directory of the dataset.
+        prefix (str): Prefix for logging.
+        cache_ram (bool): Whether to cache images in RAM.
+        cache_disk (bool): Whether to cache images on disk.
+
+    Methods:
+        __getitem__: Return transformed image and multi-hot class vector for a given index.
+        __len__: Return total number of samples.
+        verify_images: Verify all images in dataset.
+
+    Examples:
+        >>> from ultralytics.data.dataset import MultiLabelClassificationDataset
+        >>> ds = MultiLabelClassificationDataset(root="path/to/images", args=args, nc=10, labels_file="labels.csv")
+        >>> len(ds)
+        100
+        >>> ds[0]["cls"].shape
+        torch.Size([10])
+    """
+
+    def __init__(self, root: str, args, augment: bool = False, prefix: str = "", nc: int = 1000, labels_file: str = ""):
+        """Initialize multi-label classification dataset.
+
+        Args:
+            root (str): Path to dataset image directory.
+            args (Namespace): Configuration with image size, augmentation, cache settings.
+            augment (bool): Whether to apply training augmentations.
+            prefix (str): Prefix for logging.
+            nc (int): Number of classes.
+            labels_file (str): Path to labels CSV file.
+
+        Examples:
+            >>> from ultralytics.data.dataset import MultiLabelClassificationDataset
+            >>> ds = MultiLabelClassificationDataset(root="path/to/images", args=args, nc=10, labels_file="labels.csv")
+            >>> sample = ds[0]
+            >>> sample["cls"].shape  # (10,) multi-hot vector
+        """
+        self.root = root
+        self.nc = nc
+        self.prefix = colorstr(f"{prefix}: ") if prefix else ""
+        self.cache_ram = args.cache is True or str(args.cache).lower() == "ram"
+        if self.cache_ram:
+            LOGGER.warning(
+                "Classification `cache_ram` training has known memory leak in "
+                "https://github.com/ultralytics/ultralytics/issues/9824, setting `cache_ram=False`."
+            )
+            self.cache_ram = False
+        self.cache_disk = str(args.cache).lower() == "disk"
+
+        # Parse labels CSV
+        self.labels_file = str(labels_file)
+        self.samples = self._parse_labels_csv(labels_file, root, nc)
+
+        if augment and args.fraction < 1.0:
+            self.samples = self.samples[: round(len(self.samples) * args.fraction)]
+
+        self.samples = self.verify_images()
+        self.samples = [[x[0], x[1], Path(x[0]).with_suffix(".npy"), None] for x in self.samples]
+
+        scale = (1.0 - args.scale, 1.0)
+        self.torch_transforms = (
+            classify_augmentations(
+                size=args.imgsz,
+                scale=scale,
+                hflip=args.fliplr,
+                vflip=args.flipud,
+                erasing=args.erasing,
+                auto_augment=args.auto_augment,
+                hsv_h=args.hsv_h,
+                hsv_s=args.hsv_s,
+                hsv_v=args.hsv_v,
+            )
+            if augment
+            else classify_transforms(size=args.imgsz)
+        )
+
+    @staticmethod
+    def _parse_labels_csv(labels_file: str, root: str, nc: int) -> list[tuple]:
+        """Parse a labels CSV file into a list of (image_path, class_indices) tuples.
+
+        Args:
+            labels_file (str): Path to CSV file with format: image_path,class_idx1,class_idx2,...
+            root (str): Root directory to resolve relative image paths.
+            nc (int): Number of classes; indices outside [0, nc) raise an error.
+
+        Returns:
+            (list[tuple]): List of (absolute_image_path, list_of_class_indices) tuples.
+        """
+        samples = []
+        root = Path(root)
+        labels_file = Path(labels_file)
+        if not labels_file.exists():
+            raise FileNotFoundError(f"Multi-label labels file not found: {labels_file}")
+        with open(labels_file) as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split(",")
+                if len(parts) < 2:
+                    LOGGER.warning(f"Skipping invalid line {line_num} in {labels_file}: {line}")
+                    continue
+                img_path = parts[0].strip()
+                # Resolve relative paths against root
+                abs_path = root / img_path if not Path(img_path).is_absolute() else Path(img_path)
+                abs_path = str(abs_path.resolve())
+                try:
+                    class_indices = [int(x.strip()) for x in parts[1:] if x.strip()]
+                except ValueError:
+                    LOGGER.warning(f"Skipping line {line_num} with non-integer class indices: {line}")
+                    continue
+                # Validate class indices are within [0, nc)
+                bad = [i for i in class_indices if i < 0 or i >= nc]
+                if bad:
+                    raise ValueError(
+                        f"Class indices {bad} in {labels_file}:{line_num} are outside valid range [0, {nc}). "
+                        f"Check that 'nc: {nc}' in your dataset YAML matches the labels."
+                    )
+                samples.append((abs_path, class_indices))
+        if not samples:
+            raise FileNotFoundError(f"No valid samples found in {labels_file}")
+        LOGGER.info(f"Loaded {len(samples)} multi-label samples from {labels_file}")
+        return samples
+
+    def __getitem__(self, i: int) -> dict:
+        """Return transformed image and multi-hot class vector for the given sample index.
+
+        Args:
+            i (int): Index of the sample to retrieve.
+
+        Returns:
+            (dict): Dictionary with 'img' (transformed tensor) and 'cls' (multi-hot float tensor of shape (nc,)).
+        """
+        f, class_indices, fn, im = self.samples[i]
+        if self.cache_ram:
+            if im is None:
+                im = self.samples[i][3] = cv2.imread(f)
+        elif self.cache_disk:
+            if not fn.exists():
+                np.save(fn.as_posix(), cv2.imread(f), allow_pickle=False)
+            im = np.load(fn)
+        else:
+            im = cv2.imread(f)
+        im = Image.fromarray(cv2.cvtColor(im, cv2.COLOR_BGR2RGB))
+        sample = self.torch_transforms(im)
+
+        # Build multi-hot target vector (indices validated at parse time)
+        target = torch.zeros(self.nc, dtype=torch.float32)
+        for idx in class_indices:
+            target[idx] = 1.0
+        return {"img": sample, "cls": target}
+
+    def __len__(self) -> int:
+        """Return the total number of samples in the dataset."""
+        return len(self.samples)
+
+    def verify_images(self) -> list[tuple]:
+        """Verify all images in dataset.
+
+        Returns:
+            (list[tuple]): List of valid samples after verification.
+        """
+        desc = f"{self.prefix}Scanning {self.root}..."
+        path = Path(self.root).with_suffix(".cache")
+
+        try:
+            check_file_speeds([x[0] for x in self.samples[:5]], prefix=self.prefix)
+            cache = load_dataset_cache_file(path)
+            assert cache["version"] == DATASET_CACHE_VERSION
+            assert cache["hash"] == get_hash([x[0] for x in self.samples] + [self.labels_file])
+            nf, nc, n, samples = cache.pop("results")
+            if LOCAL_RANK in {-1, 0}:
+                d = f"{desc} {nf} images, {nc} corrupt"
+                TQDM(None, desc=d, total=n, initial=n)
+                if cache["msgs"]:
+                    LOGGER.info("\n".join(cache["msgs"]))
+            return samples
+        except (FileNotFoundError, AssertionError, AttributeError, ModuleNotFoundError):
+            nf, nc, msgs, samples, x = 0, 0, [], [], {}
+            with ThreadPool(NUM_THREADS) as pool:
+                # Wrap samples as ((file, cls_indices), prefix) for verify_image compatibility
+                verify_args = [((s[0], s[1]), self.prefix) for s in self.samples]
+                results = pool.imap(func=self._verify_single_image, iterable=verify_args)
+                pbar = TQDM(results, desc=desc, total=len(self.samples))
+                for sample, nf_f, nc_f, msg in pbar:
+                    if nf_f:
+                        samples.append(sample)
+                    if msg:
+                        msgs.append(msg)
+                    nf += nf_f
+                    nc += nc_f
+                    pbar.desc = f"{desc} {nf} images, {nc} corrupt"
+                pbar.close()
+            if msgs:
+                LOGGER.info("\n".join(msgs))
+            x["hash"] = get_hash([s[0] for s in self.samples] + [self.labels_file])
+            x["results"] = nf, nc, len(samples), samples
+            x["msgs"] = msgs
+            save_dataset_cache_file(self.prefix, path, x, DATASET_CACHE_VERSION)
+            return samples
+
+    @staticmethod
+    def _verify_single_image(args: tuple) -> tuple:
+        """Verify a single image file exists and is valid.
+
+        Args:
+            args (tuple): ((image_path, class_indices), prefix) tuple.
+
+        Returns:
+            (tuple): (sample_tuple, found_count, corrupt_count, message).
+        """
+        (im_file, cls_indices), prefix = args
+        nf, nc, msg = 0, 0, ""
+        try:
+            im = Image.open(im_file)
+            im.verify()
+            if im_file.lower().endswith(tuple(f".{fmt}" for fmt in IMG_FORMATS)):
+                nf = 1
+            else:
+                nf = 1  # still accept if PIL can open it
+        except Exception as e:
+            nc = 1
+            msg = f"{prefix}WARNING ⚠️ {im_file}: ignoring corrupt image: {e}"
+        return (im_file, cls_indices), nf, nc, msg
+
+
+class MultiLabelClassificationYOLODataset:
+    """
+    Dataset class for multi-label image classification tasks in YOLO format.
+    Directory Structure (Identical to YOLO Detection Datasets):
+        dataset_root/
+            images/
+                train/
+                val/
+            labels/
+                train/
+                val/
+
+    Label Specification:
+        Each image file matches a .txt annotation file with the identical base filename.
+        Each line inside the txt file stores one integer class index; multiple lines mean multiple labels for one image.
+
+    Output Label Format:
+        Float32 multi-hot encoding vector with shape [num_classes], where positions corresponding to present classes are set to 1.0.
+
+    Attributes:
+        img_path (str): Root directory path of target image split (train/val).
+        data (Optional[dict]): Dataset config dict, contains "nc"(num_classes), "names", "channels".
+        imgsz (int): Target input image resolution for model inference/training.
+        augment (bool): Toggle data augmentation pipeline.
+        prefix (str): Log print prefix for distinguishing train/val dataset logs.
+        nc (int): Total number of classification categories.
+        channels (int): Input image channel count, 1 for grayscale, 3 for RGB.
+        cv2_flag (int): cv2 read flag based on channel number (grayscale / color).
+        samples (list[str]): Full absolute paths of all image files under img_path.
+        labels (list[dict]): Parsed multi-label annotation info for each image sample.
+        ni (int): Total number of image samples in current split.
+        indices (np.ndarray): Sequential index array of all samples for sampling.
+        ims (list[Optional[np.ndarray]]): Cached raw image arrays, None if not cached.
+        im_hw0 (list[Optional[tuple[int, int]]]): Original (height, width) of each raw image.
+        im_hw (list[Optional[tuple[int, int]]]): Resized (height, width) after standard preprocessing.
+        npy_files (list[Path]): Corresponding .npy disk cache file paths for each image.
+        cache (Optional[str]): Cache strategy, supports None / "ram" / "disk".
+        torch_transforms (torchvision.transforms.Compose): Torch image preprocessing & augmentation pipeline.
+
+    Methods:
+        get_img_files: Static/helper function to traverse and collect all valid image file paths under target folder.
+        get_labels: Parse all txt label files and return structured label metadata list.
+        update_labels: Filter labels by user-specified class whitelist (args.classes).
+        cache_labels: Traverse dataset, verify image-label matching, preload label metadata and image shapes.
+        check_cache_ram: Evaluate available system RAM to judge if RAM caching is feasible.
+        check_cache_disk: Check disk storage to judge if saving npy image cache is feasible.
+        cache_images: Execute image caching logic to RAM or local disk npy files.
+
+    Examples:
+        >>> cfg = {"nc": 3, "names": {0: "water", 1: "algae", 2: "turbidity"}}
+        >>> dataset = MultiLabelClassificationYOLODataset(img_path="dataset_root/images/train", args=train_args, data=cfg, augment=True)
+        >>> label_info = dataset.get_labels()
+    """
+
+    def __init__(self, img_path: str, args, data: dict | None = None, augment: bool = False, prefix: str = ""):
+        """Initialize the YOLODataset.
+
+        Args:
+            img_path: Directory of target image split (train or val images folder)
+            args: Training argument namespace, contains imgsz, cache, classes, augmentation hyperparameters
+            data: Dataset configuration dict, must contain key "nc" for total class count
+            augment: Whether to enable random training augmentations
+            prefix: Log prefix string to mark train/val dataset logs
+        """
+        self.img_path = img_path
+        self.data = data
+        self.imgsz = args.imgsz
+        self.augment = augment
+        self.prefix = prefix
+        self.nc = data["nc"]
+        channels = data.get("channels", 3)
+        self.channels = channels
+        self.cv2_flag = cv2.IMREAD_GRAYSCALE if channels == 1 else cv2.IMREAD_COLOR
+        self.samples = self.get_img_files(self.img_path)
+        self.labels = self.get_labels()
+        self.update_labels(include_class=args.classes)  # single_cls and include_class
+        self.ni = len(self.labels)  # number of images
+        self.indices = np.arange(self.ni)
+
+        # Cache images (options are cache = True, False, None, "ram", "disk")
+        self.ims, self.im_hw0, self.im_hw = [None] * self.ni, [None] * self.ni, [None] * self.ni
+        self.npy_files = [Path(f).with_suffix(".npy") for f in self.samples]
+        self.cache = args.cache.lower() if isinstance(args.cache, str) else "ram" if args.cache is True else None
+        if self.cache == "ram" and self.check_cache_ram():
+            if args.deterministic:
+                LOGGER.warning(
+                    "cache='ram' may produce non-deterministic training results. "
+                    "Consider cache='disk' as a deterministic alternative if your disk space allows."
+                )
+            self.cache_images()
+        elif self.cache == "disk" and self.check_cache_disk():
+            self.cache_images()
+
+        # Transforms
+        scale = (1.0 - args.scale, 1.0)
+        self.torch_transforms = (
+            classify_augmentations(
+                size=args.imgsz,
+                scale=scale,
+                hflip=args.fliplr,
+                vflip=args.flipud,
+                erasing=args.erasing,
+                auto_augment=args.auto_augment,
+                hsv_h=args.hsv_h,
+                hsv_s=args.hsv_s,
+                hsv_v=args.hsv_v,
+            )
+            if augment
+            else classify_transforms(size=args.imgsz)
+        )
+
+    def get_img_files(self, img_path: str | list[str]) -> list[str]:
+        """Read image files from the specified path.
+
+        Args:
+            img_path (str | list[str]): Path or list of paths to image directories or files.
+
+        Returns:
+            (list[str]): List of image file paths.
+
+        Raises:
+            FileNotFoundError: If no images are found or the path doesn't exist.
+        """
+        try:
+            f = []  # image files
+            for p in img_path if isinstance(img_path, list) else [img_path]:
+                p = Path(p)  # os-agnostic
+                if p.is_dir():  # dir
+                    f += glob.glob(str(Path(glob.escape(p)) / "**" / "*.*"), recursive=True)
+                    # F = list(p.rglob('*.*'))  # pathlib
+                elif p.is_file():  # file
+                    with open(p, encoding="utf-8") as t:
+                        t = t.read().strip().splitlines()
+                        parent = str(p.parent) + os.sep
+                        f += [x.replace("./", parent, 1) if x.startswith("./") else x for x in t]  # local to global
+                        # F += [p.parent / x.lstrip(os.sep) for x in t]  # local to global (pathlib)
+                else:
+                    raise FileNotFoundError(f"{self.prefix}{p} does not exist")
+            im_files = sorted(x.replace("/", os.sep) for x in f if x.rpartition(".")[-1].lower() in IMG_FORMATS)
+            # self.img_files = sorted([x for x in f if x.suffix[1:].lower() in IMG_FORMATS])  # pathlib
+            assert im_files, f"{self.prefix}No images found in {img_path}. {FORMATS_HELP_MSG}"
+        except Exception as e:
+            raise FileNotFoundError(f"{self.prefix}Error loading data from {img_path}\n{HELP_URL}") from e
+        check_file_speeds(im_files, prefix=self.prefix)  # check image read speeds
+        return im_files
+
+    def update_labels(self, include_class: list[int] | None) -> None:
+        """Update labels to include only specified classes.
+
+        Args:
+            include_class (list[int], optional): List of classes to include. If None, all classes are included.
+        """
+        include_class_array = np.array(include_class).reshape(1, -1)
+        for i in range(len(self.labels)):
+            if include_class is not None:
+                cls = self.labels[i]["cls"]
+                j = (cls == include_class_array).any(1)
+                self.labels[i]["cls"] = cls[j]
+            # if self.single_cls:
+            #     self.labels[i]["cls"][:, 0] = 0
+
+    def load_image(self, i: int) -> tuple[np.ndarray]:
+        """Load an image from dataset index 'i'.
+
+        Args:
+            i (int): Index of the image to load.
+
+        Returns:
+            im (np.ndarray): Loaded image as a NumPy array.
+
+        Raises:
+            FileNotFoundError: If the image file is not found.
+        """
+        im, f, fn = self.ims[i], self.samples[i], self.npy_files[i]
+        if im is None:  # not cached in RAM
+            if fn.exists():  # load npy
+                try:
+                    im = np.load(fn)
+                    npy_channels = im.shape[-1] if im.ndim >= 3 else 1
+                    if npy_channels != self.channels:
+                        LOGGER.warning(
+                            f"{self.prefix}Removing stale *.npy image file {fn} with {npy_channels} channels, expected {self.channels}"
+                        )
+                        Path(fn).unlink(missing_ok=True)
+                        im = imread(f, flags=self.cv2_flag)
+                except Exception as e:
+                    LOGGER.warning(f"{self.prefix}Removing corrupt *.npy image file {fn} due to: {e}")
+                    Path(fn).unlink(missing_ok=True)
+                    im = imread(f, flags=self.cv2_flag)  # BGR
+            else:  # read image
+                im = imread(f, flags=self.cv2_flag)  # BGR
+            if im is None:
+                raise FileNotFoundError(f"Image Not Found {f}")
+            if im.ndim == 2:
+                im = im[..., None]
+
+            return im
+
+        return self.ims[i]
+
+    def cache_images(self) -> None:
+        """Cache images to memory or disk for faster training."""
+        b, gb = 0, 1 << 30  # bytes of cached images, bytes per gigabytes
+        fcn, storage = (self.cache_images_to_disk, "Disk") if self.cache == "disk" else (self.load_image, "RAM")
+        with ThreadPool(NUM_THREADS) as pool:
+            results = pool.imap(fcn, range(self.ni))
+            pbar = TQDM(enumerate(results), total=self.ni, disable=LOCAL_RANK > 0)
+            for i, x in pbar:
+                if self.cache == "disk":
+                    b += self.npy_files[i].stat().st_size
+                else:  # 'ram'
+                    self.ims[i], self.im_hw0[i], self.im_hw[i] = x  # im, hw_orig, hw_resized = load_image(self, i)
+                    b += self.ims[i].nbytes
+                pbar.desc = f"{self.prefix}Caching images ({b / gb:.1f}GB {storage})"
+            pbar.close()
+
+    def cache_images_to_disk(self, i: int) -> None:
+        """Save an image as an *.npy file for faster loading."""
+        f = self.npy_files[i]
+        if not f.exists():
+            try:
+                np.save(f.as_posix(), imread(self.samples[i], flags=self.cv2_flag), allow_pickle=False)
+            except Exception as e:
+                f.unlink(missing_ok=True)
+                LOGGER.warning(f"{self.prefix}WARNING ⚠️ Failed to cache image {f}: {e}")
+
+    def check_cache_disk(self, safety_margin: float = 0.5) -> bool:
+        """Check if there's enough disk space for caching images.
+
+        Args:
+            safety_margin (float): Safety margin factor for disk space calculation.
+
+        Returns:
+            (bool): True if there's enough disk space, False otherwise.
+        """
+        import shutil
+
+        b, gb = 0, 1 << 30  # bytes of cached images, bytes per gigabytes
+        n = min(self.ni, 30)  # extrapolate from 30 random images
+        for _ in range(n):
+            im_file = random.choice(self.samples)
+            im = imread(im_file)
+            if im is None:
+                continue
+            b += im.nbytes
+            if not os.access(Path(im_file).parent, os.W_OK):
+                self.cache = None
+                LOGGER.warning(f"{self.prefix}Skipping caching images to disk, directory not writable")
+                return False
+        disk_required = b * self.ni / n * (1 + safety_margin)  # bytes required to cache dataset to disk
+        total, _used, free = shutil.disk_usage(Path(self.samples[0]).parent)
+        if disk_required > free:
+            self.cache = None
+            LOGGER.warning(
+                f"{self.prefix}{disk_required / gb:.1f}GB disk space required, "
+                f"with {int(safety_margin * 100)}% safety margin but only "
+                f"{free / gb:.1f}/{total / gb:.1f}GB free, not caching images to disk"
+            )
+            return False
+        return True
+
+    def check_cache_ram(self, safety_margin: float = 0.5) -> bool:
+        """Check if there's enough RAM for caching images.
+
+        Args:
+            safety_margin (float): Safety margin factor for RAM calculation.
+
+        Returns:
+            (bool): True if there's enough RAM, False otherwise.
+        """
+        b, gb = 0, 1 << 30  # bytes of cached images, bytes per gigabytes
+        n = min(self.ni, 30)  # extrapolate from 30 random images
+        for _ in range(n):
+            im = imread(random.choice(self.samples))  # sample image
+            if im is None:
+                continue
+            ratio = self.imgsz / max(im.shape[0], im.shape[1])  # max(h, w)  # ratio
+            b += im.nbytes * ratio ** 2
+        mem_required = b * self.ni / n * (1 + safety_margin)  # GB required to cache dataset into RAM
+        mem = __import__("psutil").virtual_memory()
+        if mem_required > mem.available:
+            self.cache = None
+            LOGGER.warning(
+                f"{self.prefix}{mem_required / gb:.1f}GB RAM required to cache images "
+                f"with {int(safety_margin * 100)}% safety margin but only "
+                f"{mem.available / gb:.1f}/{mem.total / gb:.1f}GB available, not caching images"
+            )
+            return False
+        return True
+
+    def cache_labels(self, path: Path = Path("./labels.cache")) -> dict:
+        """Cache dataset labels, check images and read shapes.
+
+        Args:
+            path (Path): Path where to save the cache file.
+
+        Returns:
+            (dict): Dictionary containing cached labels and related information.
+        """
+        x = {"labels": []}
+        nm, nf, ne, nc, msgs = 0, 0, 0, 0, []  # number missing, found, empty, corrupt, messages
+        desc = f"{self.prefix}Scanning {path.parent / path.stem}..."
+        total = len(self.samples)
+        with ThreadPool(NUM_THREADS) as pool:
+            results = pool.imap(
+                func=self.verify_image_label,
+                iterable=zip(
+                    self.samples,
+                    self.label_files,
+                    repeat(self.prefix),
+                    repeat(len(self.data["names"])),
+                ),
+            )
+            pbar = TQDM(results, desc=desc, total=total)
+            for im_file, lb, shape, nm_f, nf_f, ne_f, nc_f, msg in pbar:
+                nm += nm_f
+                nf += nf_f
+                ne += ne_f
+                nc += nc_f
+                if im_file:
+                    x["labels"].append(
+                        {
+                            "im_file": im_file,
+                            "shape": shape,
+                            "cls": lb[:, 0:1],  # n, 1
+                        }
+                    )
+                if msg:
+                    msgs.append(msg)
+                pbar.desc = f"{desc} {nf} images, {nm + ne} backgrounds, {nc} corrupt"
+            pbar.close()
+
+        if msgs:
+            LOGGER.info("\n".join(msgs))
+        if nf == 0:
+            if self.augment:  # training requires labels; unlabeled val splits (e.g. COCO test-dev) only warn
+                raise ValueError(f"{self.prefix}No labels found in {path}. {HELP_URL}")
+            LOGGER.warning(f"{self.prefix}No labels found in {path}. {HELP_URL}")
+        x["hash"] = get_hash(self.label_files + self.samples)
+        x["results"] = nf, nm, ne, nc, len(self.samples)
+        x["msgs"] = msgs  # warnings
+        if x["labels"]:
+            save_dataset_cache_file(self.prefix, path, x, DATASET_CACHE_VERSION)
+        return x
+
+    @staticmethod
+    def verify_image_label(args: tuple) -> list:
+        """Verify one image-label pair."""
+        im_file, lb_file, prefix, num_cls = args
+        # Number (missing, found, empty, corrupt), message, segments, keypoints
+        nm, nf, ne, nc, msg = 0, 0, 0, 0, ""
+        try:
+            # Verify images
+            msg, shape = check_image(im_file)
+            msg = f"{prefix}{msg}" if msg else ""
+
+            # Verify labels
+            if os.path.isfile(lb_file):
+                nf = 1  # label found
+                with open(lb_file, encoding="utf-8") as f:
+                    lb = [x.split() for x in f.read().strip().splitlines() if len(x)]
+                    lb = np.array(lb, dtype=np.float32)
+                if nl := len(lb):
+                    assert lb.min() >= -0.01, f"negative class labels or coordinate {lb[lb < -0.01]}"
+
+                    # All labels
+                    max_cls = lb[:, 0].max()  # max label count
+                    assert max_cls < num_cls, (
+                        f"Label class {int(max_cls)} exceeds dataset class count {num_cls}. "
+                        f"Possible class labels are 0-{num_cls - 1}"
+                    )
+                    _, i = np.unique(lb, axis=0, return_index=True)
+                    if len(i) < nl:  # duplicate row check
+                        lb = lb[i]  # remove duplicates
+                        msg = f"{prefix}{im_file}: {nl - len(i)} duplicate labels removed"
+                else:
+                    ne = 1  # label empty
+                    # lb = np.zeros((0, (5 + nkpt * ndim) if keypoint else 5), dtype=np.float32)
+                    lb = np.zeros((0, 1), dtype=np.float32)
+            else:
+                nm = 1  # label missing
+                # lb = np.zeros((0, (5 + nkpt * ndim) if keypoint else 5), dtype=np.float32)
+                lb = np.zeros((0, 1), dtype=np.float32)
+            # lb = lb[:, :5]
+            return im_file, lb, shape, nm, nf, ne, nc, msg
+        except Exception as e:
+            nc = 1
+            msg = f"{prefix}{im_file}: ignoring corrupt image/label: {e}"
+            return [None, None, None, nm, nf, ne, nc, msg]
+
+    def get_labels(self) -> list[dict]:
+        """Return list of label dictionaries for YOLO training.
+
+        This method loads labels from disk or cache, verifies their integrity, and prepares them for training.
+
+        Returns:
+            (list[dict]): List of label dictionaries, each containing information about an image and its annotations.
+        """
+        self.label_files = img2label_paths(self.samples)
+        cache_path = Path(self.label_files[0]).parent.with_suffix(".cache")
+        try:
+            cache, exists = load_dataset_cache_file(cache_path), True  # attempt to load a *.cache file
+            assert cache["version"] == DATASET_CACHE_VERSION  # matches current version
+            assert cache["hash"] == get_hash(self.label_files + self.samples)  # identical hash
+        except (FileNotFoundError, AssertionError, AttributeError, ModuleNotFoundError):
+            cache, exists = self.cache_labels(cache_path), False  # run cache ops
+
+        # Display cache
+        nf, nm, ne, nc, n = cache.pop("results")  # found, missing, empty, corrupt, total
+        if exists and LOCAL_RANK in {-1, 0}:
+            d = f"Scanning {cache_path}... {nf} images, {nm + ne} backgrounds, {nc} corrupt"
+            TQDM(None, desc=self.prefix + d, total=n, initial=n)  # display results
+            if cache["msgs"]:
+                LOGGER.info("\n".join(cache["msgs"]))  # display warnings
+
+        # Read cache
+        labels = cache["labels"]
+        if not labels:
+            issues = "\n  ".join(sorted(set(cache["msgs"]))) or "no error details"
+            raise RuntimeError(f"No valid images found in {cache_path}.\n  {issues}\n{HELP_URL}")
+        [cache.pop(k) for k in ("hash", "version", "msgs")]  # remove items
+        self.samples = [lb["im_file"] for lb in labels]  # update samples
+
+        # Check if the dataset is all boxes or all segments
+        # lengths = ((len(lb["cls"])) for lb in labels)
+        len_cls = sum(np.count_nonzero(lb["cls"]) for lb in labels)
+        if len_cls == 0:
+            LOGGER.warning(f"Labels are missing or empty in {cache_path}, training may not work correctly. {HELP_URL}")
+        return labels
+
+    def __len__(self) -> int:
+        """Return the length of the labels list for the dataset."""
+        return len(self.labels)
+
+    def __getitem__(self, index):
+        """Return transformed image and multi-hot class vector for the given sample index.
+
+        Args:
+            i (int): Index of the sample to retrieve.
+
+        Returns:
+            (dict): Dictionary with 'img' (transformed tensor) and 'cls' (multi-hot float tensor of shape (nc,)).
+        """
+        # index = self.indices[index]  # linear, shuffled, or image_weights
+        # Load image
+        img = self.load_image(index)
+
+        labels = self.labels[index].copy()
+        labels = labels['cls']
+        labels = labels.astype(np.int32)
+        labels = np.unique(labels)
+
+        target = np.zeros((self.nc,), dtype=np.float32)
+        target[labels] = 1.0
+
+        # Convert NumPy array to PIL image
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(img)
+        img = self.torch_transforms(img)
+
+        return {"img": img, "cls": target}
+        

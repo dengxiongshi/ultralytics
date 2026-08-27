@@ -241,6 +241,7 @@ class Results(SimpleClass, DataExportMixin):
         obb: torch.Tensor | None = None,
         speed: dict[str, float] | None = None,
         semantic_mask: torch.Tensor | None = None,
+        multi_label: bool = False,
     ) -> None:
         """Initialize the Results class for storing and manipulating inference results.
 
@@ -255,6 +256,7 @@ class Results(SimpleClass, DataExportMixin):
             obb (torch.Tensor | None): A 2D tensor of oriented bounding box coordinates for each detection.
             semantic_mask (torch.Tensor | None): A 2D tensor of class IDs for semantic segmentation results.
             speed (dict | None): A dictionary containing preprocess, inference, and postprocess speeds (ms/image).
+            multi_label (bool): Whether this is a multi-label classification result (sigmoid instead of softmax).
 
         Notes:
             For the default pose model, keypoint indices for human body pose estimation are:
@@ -275,6 +277,7 @@ class Results(SimpleClass, DataExportMixin):
         self.names = names
         self.path = path
         self.save_dir = None
+        self.multi_label = multi_label
         self._keys = "boxes", "masks", "probs", "keypoints", "obb", "semantic_mask"
 
     def __getitem__(self, idx):
@@ -331,7 +334,7 @@ class Results(SimpleClass, DataExportMixin):
             masks (torch.Tensor | None): A tensor of shape (N, H, W) containing segmentation masks.
             probs (torch.Tensor | None): A tensor of shape (num_classes,) containing class probabilities.
             obb (torch.Tensor | None): A tensor of shape (N, 7) or (N, 8) containing oriented bounding box coordinates.
-            keypoints (torch.Tensor | None): A tensor of shape (N, K, 3) containing keypoints, were K=17 for persons.
+            keypoints (torch.Tensor | None): A tensor of shape (N, K, 3) containing keypoints, where K=17 for persons.
             semantic_mask (torch.Tensor | None): A tensor of shape (H, W) containing class IDs for semantic
                 segmentation.
 
@@ -345,7 +348,7 @@ class Results(SimpleClass, DataExportMixin):
         if masks is not None:
             self.masks = Masks(masks, self.orig_shape)
         if probs is not None:
-            self.probs = probs
+            self.probs = Probs(probs)
         if obb is not None:
             self.obb = OBB(obb, self.orig_shape)
         if keypoints is not None:
@@ -507,7 +510,7 @@ class Results(SimpleClass, DataExportMixin):
         Examples:
             >>> results = model("image.jpg")
             >>> for result in results:
-            ...     im = result.plot()
+            ...     im = result.plot(pil=True)
             ...     im.show()
         """
         assert color_mode in {"instance", "class"}, f"Expected color_mode='instance' or 'class', not {color_mode}."
@@ -519,6 +522,8 @@ class Results(SimpleClass, DataExportMixin):
         pred_boxes, show_boxes = self.obb if is_obb else self.boxes, boxes
         pred_masks, show_masks = self.masks, masks
         pred_probs, show_probs = self.probs, probs
+        if pred_boxes is not None and (show_boxes or (pred_masks and show_masks)):
+            pred_boxes = pred_boxes.cpu()  # one host transfer avoids per-box GPU syncs in the color and label loops
         annotator = Annotator(
             deepcopy(self.orig_img if img is None else img),
             line_width,
@@ -541,7 +546,7 @@ class Results(SimpleClass, DataExportMixin):
                 )
             idx = (
                 pred_boxes.id
-                if pred_boxes.is_track and color_mode == "instance"
+                if pred_boxes and pred_boxes.is_track and color_mode == "instance"
                 else pred_boxes.cls
                 if pred_boxes and color_mode == "class"
                 else reversed(range(len(pred_masks)))
@@ -572,7 +577,12 @@ class Results(SimpleClass, DataExportMixin):
 
         # Plot Classify results
         if pred_probs is not None and show_probs:
-            text = "\n".join(f"{names[j] if names else j} {pred_probs.data[j]:.2f}" for j in pred_probs.top5)
+            if self.multi_label:
+                indices = (pred_probs.data > 0.5).nonzero(as_tuple=True)[0].tolist()
+                show_indices = indices if indices else pred_probs.top5
+                text = "\n".join(f"{names[j] if names else j} {pred_probs.data[j]:.2f}" for j in show_indices)
+            else:
+                text = "\n".join(f"{names[j] if names else j} {pred_probs.data[j]:.2f}" for j in pred_probs.top5)
             x = round(self.orig_shape[0] * 0.03)
             annotator.text([x, x], text, txt_color=txt_color, box_color=(64, 64, 64, 128))  # RGBA box
 
@@ -585,7 +595,7 @@ class Results(SimpleClass, DataExportMixin):
 
         # Plot Pose results
         if self.keypoints is not None:
-            for i, k in enumerate(reversed(self.keypoints.data)):
+            for i, k in enumerate(reversed(self.keypoints.cpu().numpy().data)):  # one host transfer, no per-kpt syncs
                 annotator.kpts(
                     k,
                     self.orig_shape,
@@ -679,6 +689,12 @@ class Results(SimpleClass, DataExportMixin):
         if len(self) == 0:
             return "" if self.probs is not None else "(no detections), "
         if self.probs is not None:
+            if self.multi_label:
+                # Show all classes above threshold for multi-label
+                indices = (self.probs.data > 0.5).nonzero(as_tuple=True)[0].tolist()
+                if indices:
+                    return f"{', '.join(f'{self.names[j]} {self.probs.data[j]:.2f}' for j in indices)}, "
+                return f"{self.names[self.probs.top1]} {self.probs.data[self.probs.top1]:.2f}, "
             return f"{', '.join(f'{self.names[j]} {self.probs.data[j]:.2f}' for j in self.probs.top5)}, "
         if boxes:
             counts = boxes.cls.int().bincount()
@@ -723,8 +739,12 @@ class Results(SimpleClass, DataExportMixin):
         kpts = self.keypoints
         texts = []
         if probs is not None:
-            # Classify
-            [texts.append(f"{probs.data[j]:.2f} {self.names[j]}") for j in probs.top5]
+            if self.multi_label:
+                indices = (probs.data > 0.5).nonzero(as_tuple=True)[0].tolist()
+                [texts.append(f"{probs.data[j]:.2f} {self.names[j]}") for j in (indices or probs.top5)]
+            else:
+                # Classify
+                [texts.append(f"{probs.data[j]:.2f} {self.names[j]}") for j in probs.top5]
         elif boxes:
             # Detect/segment/pose
             for j, d in enumerate(boxes):
@@ -810,16 +830,28 @@ class Results(SimpleClass, DataExportMixin):
         # Create list of detection dictionaries
         results = []
         if self.probs is not None:
-            # Return top 5 classification results
-            for class_id, conf in zip(self.probs.top5, self.probs.top5conf.tolist()):
-                class_id = int(class_id)
-                results.append(
-                    {
-                        "name": self.names[class_id],
-                        "class": class_id,
-                        "confidence": round(conf, decimals),
-                    }
-                )
+            if self.multi_label:
+                # Return all classes above threshold, fall back to top5 if none
+                indices = (self.probs.data > 0.5).nonzero(as_tuple=True)[0].tolist() or self.probs.top5
+                for class_id in indices:
+                    results.append(
+                        {
+                            "name": self.names[class_id],
+                            "class": class_id,
+                            "confidence": round(float(self.probs.data[class_id]), decimals),
+                        }
+                    )
+            else:
+                # Return top 5 classification results
+                for class_id, conf in zip(self.probs.top5, self.probs.top5conf.tolist()):
+                    class_id = int(class_id)
+                    results.append(
+                        {
+                            "name": self.names[class_id],
+                            "class": class_id,
+                            "confidence": round(conf, decimals),
+                        }
+                    )
             return results
 
         if self.semantic_mask is not None:
@@ -1505,7 +1537,7 @@ class OBB(BaseTensor):
                 bounding box. Returns None if tracking IDs are not available.
 
         Examples:
-            >>> results = model("image.jpg", tracker=True)  # Run inference with tracking
+            >>> results = model.track("path/to/video.mp4")  # Run inference with tracking
             >>> for result in results:
             ...     if result.obb is not None:
             ...         track_ids = result.obb.id

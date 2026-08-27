@@ -32,7 +32,7 @@ from ultralytics.utils import (
     emojis,
     is_dir_writeable,
 )
-from ultralytics.utils.checks import check_file, check_font, is_ascii
+from ultralytics.utils.checks import check_file, check_font, is_ascii, normalize_platform_uri
 from ultralytics.utils.downloads import download, safe_download, unzip_file
 from ultralytics.utils.ops import segments2boxes
 
@@ -45,7 +45,6 @@ IMG_FORMATS = {
     "heif",
     "jp2",
     "jpeg",
-    "jpeg2000",
     "jpg",
     "mpo",
     "png",
@@ -131,7 +130,7 @@ def check_file_speeds(
         avg_speed = float("inf")
         speed_msg = ""
 
-    if avg_ping < threshold_ms or avg_speed < threshold_mb:
+    if avg_ping < threshold_ms and avg_speed > threshold_mb:
         LOGGER.info(f"{prefix}Fast image access ✅ ({ping_msg}{speed_msg}{size_msg})")
     else:
         LOGGER.warning(
@@ -215,7 +214,7 @@ def verify_image(args: tuple) -> tuple:
 def verify_image_mask(args: tuple) -> tuple:
     """Verify that an image and its semantic mask exist, are readable, and have matching shapes."""
     im_file, mask_file, prefix = args
-    # Number (found, corrupt), message
+    # Number (found, missing, corrupt), message
     nf, nm, nc, msg = 0, 0, 0, ""
     try:
         msg, shape = check_image(im_file)
@@ -411,10 +410,9 @@ def polygons2masks_overlap(
     areas = np.asarray(areas)
     index = np.argsort(-areas)
     ms = np.array(ms)[index]
+    # Running max: the old `masks + mask` sum hit 2 * i + 1 and overflowed uint8 past 128 overlapping instances
     for i in range(len(segments)):
-        mask = ms[i] * (i + 1)
-        masks = masks + mask
-        masks = np.clip(masks, a_min=0, a_max=i + 1)
+        np.maximum(masks, ms[i] * (i + 1), out=masks)
     return masks, index
 
 
@@ -440,17 +438,18 @@ def find_dataset_yaml(path: Path) -> Path:
 
 def convert_ndjson_to_yolo_if_needed(data: str | Path) -> str | Path:
     """Convert an NDJSON dataset or Platform dataset URI to YOLO format."""
+    data = normalize_platform_uri(data)  # accept Platform web URLs (https://platform.ultralytics.com/.../datasets/...)
     data_str = str(data)
-    if data_str.endswith(".ndjson") or (data_str.startswith("ul://") and "/datasets/" in data_str):
+    if clean_url(data_str).endswith(".ndjson") or (data_str.startswith("ul://") and "/datasets/" in data_str):
         import asyncio
 
         from ultralytics.data.converter import convert_ndjson_to_yolo
 
-        return asyncio.run(convert_ndjson_to_yolo(check_file(data)))
+        return asyncio.run(convert_ndjson_to_yolo(data))
     return data
 
 
-def check_det_dataset(dataset: str, autodownload: bool = True) -> dict[str, Any]:
+def check_det_dataset(dataset: str, autodownload: bool = True, split: str = "") -> dict[str, Any]:
     """Download, verify, and/or unzip a dataset if not found locally.
 
     This function checks the availability of a specified dataset, and if not found, it has the option to download and
@@ -460,10 +459,15 @@ def check_det_dataset(dataset: str, autodownload: bool = True) -> dict[str, Any]
     Args:
         dataset (str): Path to the dataset or dataset descriptor (like a YAML file).
         autodownload (bool, optional): Whether to automatically download the dataset if not found.
+        split (str, optional): Dataset split required by the caller.
 
     Returns:
         (dict[str, Any]): Parsed dataset information and paths.
     """
+    dataset = str(dataset)
+    if "://" not in dataset and not Path(dataset).exists() and Path(dataset).suffix not in {".yaml", ".yml"}:
+        # allow bare dataset names, e.g. 'coco8' -> 'coco8.yaml', 'DOTAv1.5' -> 'DOTAv1.5.yaml'
+        dataset = next((f"{dataset}{x}" for x in (".yaml", ".yml") if check_file(f"{dataset}{x}", hard=False)), dataset)
     file = Path(check_file(dataset))
     if file.is_dir():
         file = find_dataset_yaml(file)
@@ -487,8 +491,18 @@ def check_det_dataset(dataset: str, autodownload: bool = True) -> dict[str, Any]
                 )
             LOGGER.warning("renaming data YAML 'validation' key to 'val' to match YOLO format.")
             data["val"] = data.pop("validation")  # replace 'validation' key with 'val' key
+    if split and not data.get(split):
+        raise FileNotFoundError(f"{dataset} '{split}:' images not found ❌")
     if "names" not in data and "nc" not in data:
         raise SyntaxError(emojis(f"{dataset} key missing ❌.\n either 'names' or 'nc' are required in all data YAMLs."))
+    if "nc" in data and not isinstance(data["nc"], int):
+        try:
+            nc = float(data["nc"])  # accept integer-like values, e.g. '10' or 10.0, but not 1.9 or placeholders
+            if nc != int(nc):
+                raise ValueError
+            data["nc"] = int(nc)
+        except (TypeError, ValueError):
+            raise SyntaxError(emojis(f"{dataset} 'nc: {data['nc']}' must be an integer ❌."))
     if "names" in data and "nc" in data and len(data["names"]) != data["nc"]:
         raise SyntaxError(emojis(f"{dataset} 'names' length {len(data['names'])} and 'nc: {data['nc']}' must match."))
     if "names" not in data:
@@ -517,7 +531,7 @@ def check_det_dataset(dataset: str, autodownload: bool = True) -> dict[str, Any]
                 data[k] = [str((path / x).resolve()) for x in data[k]]
 
     # Parse YAML
-    val, s = (data.get(x) for x in ("val", "download"))
+    val, s = (data.get(x) for x in (split or "val", "download"))
     if val:
         val = [Path(x).resolve() for x in (val if isinstance(val, list) else [val])]  # val path
         if not all(x.exists() for x in val):
@@ -565,6 +579,9 @@ def check_cls_dataset(dataset: str | Path, split: str = "") -> dict[str, Any]:
             - 'nc' (int): The number of classes in the dataset.
             - 'names' (dict[int, str]): A dictionary of class names in the dataset.
     """
+    if split and split not in {"train", "val", "test"}:
+        raise ValueError(f"Invalid classification dataset split '{split}'. Use 'train', 'val', or 'test'.")
+
     # Download (optional if dataset=https://file.zip is passed directly)
     if str(dataset).startswith(("http:/", "https:/")):
         dataset = safe_download(dataset, dir=DATASETS_DIR, unzip=True, delete=False)
@@ -616,9 +633,11 @@ def check_cls_dataset(dataset: str | Path, split: str = "") -> dict[str, Any]:
         LOGGER.warning("Dataset 'split=test' not found, using 'split=val' instead.")
         test_set = val_set
 
-    nc = len([x for x in (data_dir / "train").glob("*") if x.is_dir()])  # number of classes
-    names = [x.name for x in (data_dir / "train").iterdir() if x.is_dir()]  # class names list
-    names = dict(enumerate(sorted(names)))
+    if (ndjson_names := data_dir / ".ndjson.yaml").is_file():
+        names = YAML.load(ndjson_names)["names"]
+    else:
+        names = dict(enumerate(sorted(x.name for x in (data_dir / "train").iterdir() if x.is_dir())))
+    nc = len(names)
 
     # Print to console
     for k, v in {"train": train_set, "val": val_set, "test": test_set}.items():
@@ -634,13 +653,77 @@ def check_cls_dataset(dataset: str | Path, split: str = "") -> dict[str, Any]:
                     raise FileNotFoundError(f"{dataset} '{k}:' no training images found")
                 else:
                     LOGGER.warning(f"{prefix} found {nf} images in {nd} classes (no images found)")
-            elif nd != nc:
+            elif nd != nc and not ndjson_names.is_file():
                 LOGGER.error(f"{prefix} found {nf} images in {nd} classes (requires {nc} classes, not {nd})")
             else:
-                LOGGER.info(f"{prefix} found {nf} images in {nd} classes ✅ ")
+                class_count = f"{nd}/{nc}" if ndjson_names.is_file() else nd
+                LOGGER.info(f"{prefix} found {nf} images in {class_count} classes ✅ ")
 
     return {"train": train_set, "val": val_set, "test": test_set, "nc": nc, "names": names, "channels": 3}
 
+
+def check_multilabel_cls_dataset(dataset: str | Path) -> dict[str, Any]:
+    """Check and validate a multi-label classification dataset from a YAML config.
+
+    Expects a dataset.yaml with keys: path, train, val, nc, names, and a labels.csv file in each split directory
+    mapping image filenames to comma-separated class indices.
+
+    Args:
+        dataset (str | Path): Path to the dataset YAML config file.
+
+    Returns:
+        (dict[str, Any]): Dictionary with keys 'train', 'val', 'test', 'nc', 'names', 'channels', and per-split
+            'labels_file' paths (e.g., 'train_labels_file').
+
+    Examples:
+        >>> data = check_multilabel_cls_dataset("path/to/dataset.yaml")
+        >>> print(data["nc"], data["train_labels_file"])
+    """
+    dataset = Path(check_file(dataset)).resolve()
+    data = YAML.load(dataset)
+    path = Path(data.get("path", "") or dataset.parent)  # dataset root
+    if not path.is_absolute():
+        path = (dataset.parent / path).resolve()  # resolve relative to YAML location
+    if not path.exists() and not path.is_absolute():
+        path = (DATASETS_DIR / path).resolve()  # fallback to datasets dir
+    if not path.is_dir():
+        raise FileNotFoundError(f"Multi-label dataset path not found: {path}")
+
+    nc = int(data["nc"])
+    names = data["names"]
+    if isinstance(names, list):
+        names = dict(enumerate(names))
+
+    result = {"nc": nc, "names": names, "channels": 3}
+
+    for split in ("train", "val", "test"):
+        split_rel = data.get(split)
+        if split_rel:
+            split_dir = path / split_rel
+            if split_dir.is_dir():
+                result[split] = split_dir
+                # Look for labels.csv in the split dir or the dataset root
+                labels_file = split_dir / "labels.csv"
+                if not labels_file.exists():
+                    labels_file = path / f"{split}_labels.csv"
+                if not labels_file.exists():
+                    labels_file = path / "labels.csv"
+                if labels_file.exists():
+                    result[f"{split}_labels_file"] = str(labels_file)
+                    LOGGER.info(f"{colorstr(f'{split}:')} using labels from {labels_file}")
+                else:
+                    raise FileNotFoundError(
+                        f"Multi-label labels file not found for split '{split}'. "
+                        f"Expected at {split_dir / 'labels.csv'} or {path / f'{split}_labels.csv'}"
+                    )
+            else:
+                result[split] = None
+                LOGGER.warning(f"Dataset split '{split}' directory not found at {split_dir}")
+        else:
+            result[split] = None
+
+    return result
+    
 
 class HUBDatasetStats:
     """A class for generating HUB dataset JSON and `-hub` dataset directory.
@@ -794,15 +877,23 @@ class HUBDatasetStats:
 
     def process_images(self) -> Path:
         """Compress images for Ultralytics HUB."""
-        from ultralytics.data import YOLODataset  # ClassificationDataset
+        from ultralytics.data import YOLODataset
 
         self.im_dir.mkdir(parents=True, exist_ok=True)  # makes dataset-hub/images/
         for split in "train", "val", "test":
-            if self.data.get(split) is None:
+            split_path = self.data.get(split)
+            if split_path is None:
                 continue
-            dataset = YOLODataset(img_path=self.data[split], data=self.data)
+            if self.task == "classify":
+                from torchvision.datasets import ImageFolder  # scope for faster 'import ultralytics'
+
+                dataset = ImageFolder(split_path)
+                im_files = [f for f, _ in dataset.imgs]
+            else:
+                dataset = YOLODataset(img_path=split_path, data=self.data, task=self.task)
+                im_files = dataset.im_files
             with ThreadPool(NUM_THREADS) as pool:
-                for _ in TQDM(pool.imap(self._hub_ops, dataset.im_files), total=len(dataset), desc=f"{split} images"):
+                for _ in TQDM(pool.imap(self._hub_ops, im_files), total=len(im_files), desc=f"{split} images"):
                     pass
         LOGGER.info(f"Done. All images saved to {self.im_dir}")
         return self.im_dir

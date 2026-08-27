@@ -31,7 +31,6 @@ class DetectionValidator(BaseValidator):
         metrics (DetMetrics): Object detection metrics calculator.
         iouv (torch.Tensor): IoU thresholds for mAP calculation.
         niou (int): Number of IoU thresholds.
-        lb (list[Any]): List for storing ground truth labels for hybrid saving.
         jdict (list[dict[str, Any]]): List for storing JSON detection results.
         stats (dict[str, list[torch.Tensor]]): Dictionary for storing statistics during validation.
 
@@ -72,7 +71,7 @@ class DetectionValidator(BaseValidator):
         for k, v in batch.items():
             if isinstance(v, torch.Tensor):
                 batch[k] = v.to(self.device, non_blocking=self.device.type == "cuda")
-        batch["img"] = (batch["img"].half() if self.args.half else batch["img"].float()) / 255
+        batch["img"] = (batch["img"].half() if self.args.quantize == 16 else batch["img"].float()) / 255
         return batch
 
     def init_metrics(self, model: torch.nn.Module) -> None:
@@ -102,7 +101,7 @@ class DetectionValidator(BaseValidator):
 
     def get_desc(self) -> str:
         """Return a formatted string summarizing class metrics of YOLO model."""
-        return ("%22s" + "%11s" * 6) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP50-95)")
+        return ("%22s" + "%11s" * 7) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP75", "mAP50-95)")
 
     def postprocess(self, preds: torch.Tensor) -> list[dict[str, torch.Tensor]]:
         """Apply Non-maximum suppression to prediction outputs.
@@ -264,6 +263,11 @@ class DetectionValidator(BaseValidator):
             self._gather_image_metrics(self.metrics.box)
             self.jdict = []
             self.metrics.clear_stats()
+        if self.args.plots and RANK > -1:
+            matrix = torch.as_tensor(self.confusion_matrix.matrix, device=self.device)
+            dist.reduce(matrix, dst=0, op=dist.ReduceOp.SUM)
+            if RANK == 0:
+                self.confusion_matrix.matrix = matrix.cpu().numpy()
 
     def get_stats(self) -> dict[str, Any]:
         """Calculate and return metrics statistics.
@@ -517,6 +521,7 @@ class DetectionValidator(BaseValidator):
 
                     # update mAP50-95 and mAP50
                     stats[f"metrics/mAP50({suffix[i][0]})"] = val.stats_as_dict["AP_50"]
+                    stats[f"metrics/mAP75({suffix[i][0]})"] = val.stats_as_dict["AP_75"]
                     stats[f"metrics/mAP50-95({suffix[i][0]})"] = val.stats_as_dict["AP_all"]
                     # record mAP for small, medium, large objects as well
                     stats["metrics/mAP_small(B)"] = val.stats_as_dict["AP_small"]

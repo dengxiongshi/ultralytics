@@ -33,7 +33,7 @@ batch_size = 4
 device = [0]
 # project = ROOT / "runs/train/detect"
 project = "test"
-name = "yolov8s_chinese"
+name = "yolov8s_20260827"
 optimizer = "SGD"
 workers = 0
 

@@ -127,15 +127,15 @@ def modify_xml_labels(xml_folder: str):
 
 if __name__ == "__main__":
     # ====================== 在这里修改你的xml文件夹路径 ======================
-    # XML_FOLDER_PATH = r"H:\datasets\Basic_Single_Fish\T05\D1\S1\A0\W0\F20F21F22\Annotations"  # 存放所有xml的目录
-    # IS_OVERWRITE = True  # False：生成新文件；True：直接覆盖原文件（谨慎使用）
-    # # =========================================================================
-    # clean_all_xml_in_dir(XML_FOLDER_PATH, overwrite=IS_OVERWRITE)
+    XML_FOLDER_PATH = r"H:\datasets\Basic_Single_Fish\T07\D1\S0\A0\W0\F46\Annotations"  # 存放所有xml的目录
+    IS_OVERWRITE = True  # False：生成新文件；True：直接覆盖原文件（谨慎使用）
+    # =========================================================================
+    clean_all_xml_in_dir(XML_FOLDER_PATH, overwrite=IS_OVERWRITE)
 
-    target_dir = r"H:\datasets\Basic_Single_Fish\T13\D1\S0\A1\W0\L3\20260610_F3\images"
-    old_tag = "A0"
-    new_tag = "A1"
-    rename_by_regex(target_dir, old_tag=old_tag, new_tag=new_tag)
+    # target_dir = r"H:\datasets\Basic_Single_Fish\T13\D1\S0\A1\W0\L3\20260610_F3\images"
+    # old_tag = "A0"
+    # new_tag = "A1"
+    # rename_by_regex(target_dir, old_tag=old_tag, new_tag=new_tag)
 
     # 改成你的xml文件夹路径
     # xml_dir = r"H:\datasets\Basic_Single_Fish\T05\D1\S0\A0\W0\F3F50\Annotations"

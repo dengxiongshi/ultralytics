@@ -143,7 +143,7 @@ def generate_yaml(root: Path, class_names: list):
     }
     yaml_path = root / "dataset.yaml"
     with open(yaml_path, "w", encoding="utf-8") as f:
-        yaml.dump(yaml_data, f, sort_keys=False, default_flow_style=None, allow_unicode=True)
+        yaml.dump(yaml_data, f, sort_keys=False, default_flow_style=None, allow_unicode=True, indent=2)
     print(f"\n✅ YOLO数据集配置文件已生成：{yaml_path}")
 
 

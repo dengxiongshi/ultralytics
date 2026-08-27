@@ -1,4 +1,5 @@
 ---
+title: utils.callbacks.platform API Reference
 description: Platform callback functions for console logging during YOLO11 training lifecycle events.
 keywords: platform callbacks, training callbacks, console logging, YOLO11 training, lifecycle events, Ultralytics
 ---
@@ -40,10 +41,6 @@ keywords: platform callbacks, training callbacks, console logging, YOLO11 traini
 <br><br><hr><br>
 
 ## ::: ultralytics.utils.callbacks.platform._upload_model
-
-<br><br><hr><br>
-
-## ::: ultralytics.utils.callbacks.platform._upload_model_async
 
 <br><br><hr><br>
 
