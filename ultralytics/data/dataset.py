@@ -1809,8 +1809,8 @@ class MultiLabelClassificationYOLODataset:
         self.samples = [lb["im_file"] for lb in labels]  # update samples
 
         # Check if the dataset is all boxes or all segments
-        # lengths = ((len(lb["cls"])) for lb in labels)
-        len_cls = sum(np.count_nonzero(lb["cls"]) for lb in labels)
+        # len_cls = sum(np.count_nonzero(lb["cls"]) for lb in labels)
+        len_cls = sum(len(lb["cls"]) for lb in labels)
         if len_cls == 0:
             LOGGER.warning(f"Labels are missing or empty in {cache_path}, training may not work correctly. {HELP_URL}")
         return labels

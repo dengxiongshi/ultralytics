@@ -8,4 +8,5 @@ pip install -e .
 
 # download Arial.ttf
 mkdir -p /root/.config/Ultralytics
-cp weights/Arial.ttf /root/.config/Ultralytics
+cp models/Arial.ttf /root/.config/Ultralytics
+cp models/Arial.Unicode.ttf /root/.config/Ultralytics
