@@ -71,7 +71,7 @@ Install the required packages:
 
 **Requirements:**
 
-- NVIDIA GPU (compute capability 5.0+ / Maxwell or newer)
+- NVIDIA GPU (compute capability 5.0+ / Maxwell or newer; 7.5+ / Turing or newer for CUDA 13)
 - CUDA 11.0+, 12.0+ or 13.0+
 - Python 3.10-3.14
 - Linux operating system
@@ -118,9 +118,8 @@ This version exactly replicates the default Ultralytics preprocessing with cente
 !!! example "DALI pipeline with centered padding (recommended)"
 
     ```python
-    import nvidia.dali as dali
-    import nvidia.dali.fn as fn
-    import nvidia.dali.types as types
+    from nvidia import dali
+    from nvidia.dali import fn, types
 
 
     @dali.pipeline_def(batch_size=8, num_threads=4, device_id=0)
@@ -234,7 +233,7 @@ This applies to all external preprocessing paths — direct tensor input, video 
 
 !!! tip "Zero Preprocessing Overhead"
 
-    When you pass a `torch.Tensor` to `model.predict()`, the image preprocessing step takes ~0.004ms (essentially zero) compared to ~1-10ms with CPU preprocessing. The tensor must be in BCHW format, float32 (or float16), and normalized to `[0, 1]`. Ultralytics will still handle device transfer and dtype casting automatically.
+    When you pass a `torch.Tensor` to `model.predict()`, the image preprocessing step takes ~0.004ms (essentially zero) compared to ~1-10ms with CPU preprocessing. The tensor must be in BCHW format, float32 (or float16), and normalized to `[0, 1]`. Ultralytics still handles device transfer and dtype casting automatically.
 
 ## DALI with Video Streams
 
@@ -245,9 +244,8 @@ For real-time video processing, use `fn.external_source` to feed frames from any
     === "Pipeline Definition"
 
         ```python
-        import nvidia.dali as dali
-        import nvidia.dali.fn as fn
-        import nvidia.dali.types as types
+        from nvidia import dali
+        from nvidia.dali import fn, types
 
 
         @dali.pipeline_def(batch_size=1, num_threads=4, device_id=0)
@@ -343,9 +341,8 @@ Serialize the DALI pipeline for the Triton DALI backend:
 !!! example "Serialize DALI pipeline for Triton"
 
     ```python
-    import nvidia.dali as dali
-    import nvidia.dali.fn as fn
-    import nvidia.dali.types as types
+    from nvidia import dali
+    from nvidia.dali import fn, types
 
 
     @dali.pipeline_def(batch_size=8, num_threads=4, device_id=0)
@@ -389,11 +386,22 @@ Serialize the DALI pipeline for the Triton DALI backend:
 !!! example "Export YOLO model to TensorRT engine"
 
     ```python
+    from pathlib import Path
+
     from ultralytics import YOLO
 
     model = YOLO("yolo26n.pt")
-    model.export(format="engine", imgsz=640, quantize=16, batch=8)
-    # Copy the .engine file to model_repository/yolo_trt/1/model.plan
+    engine_path = model.export(
+        format="engine", imgsz=640, quantize=16, batch=8, dynamic=True, nms=False
+    )  # NMS-free (N, 300, 6); TensorRT >= 8.5
+
+    # Ultralytics prepends a metadata header to .engine files; strip it so Triton can load the raw TensorRT plan
+    with open(engine_path, "rb") as f:
+        meta_len = int.from_bytes(f.read(4), byteorder="little")  # length of the JSON metadata header
+        f.seek(4 + meta_len)
+        plan = f.read()
+    Path("model_repository/yolo_trt/1").mkdir(parents=True, exist_ok=True)
+    Path("model_repository/yolo_trt/1/model.plan").write_bytes(plan)
     ```
 
 ### Step 3: Configure Triton
@@ -522,7 +530,7 @@ ensemble_scheduling {
     result = client.infer(model_name="ensemble_dali_yolo", inputs=[input_tensor])
     detections = result.as_numpy("OUTPUT")  # Shape: (1, 300, 6) -> [x1, y1, x2, y2, conf, class_id]
 
-    # Filter by confidence (no NMS needed — YOLO26 is end-to-end)
+    # Filter by confidence (no NMS needed for the nms=False export)
     detections = detections[0]  # First image
     detections = detections[detections[:, 4] > 0.25]  # Confidence threshold
     print(f"Detected {len(detections)} objects")
@@ -541,9 +549,10 @@ DALI preprocessing works with all YOLO tasks that use the standard `LetterBox` p
 | [Detection](../tasks/detect.md)               | ✅        | Standard letterbox preprocessing                         |
 | [Instance Segmentation](../tasks/segment.md)  | ✅        | Same preprocessing as detection                          |
 | [Semantic Segmentation](../tasks/semantic.md) | ✅        | Same image preprocessing as detection                    |
+| [Depth Estimation](../tasks/depth.md)         | ✅        | Same image preprocessing as detection                    |
+| [Classification](../tasks/classify.md)        | ❌        | Uses torchvision transforms (center crop), not letterbox |
 | [Pose Estimation](../tasks/pose.md)           | ✅        | Same preprocessing as detection                          |
 | [Oriented Detection (OBB)](../tasks/obb.md)   | ✅        | Same preprocessing as detection                          |
-| [Classification](../tasks/classify.md)        | ❌        | Uses torchvision transforms (center crop), not letterbox |
 
 ## Limitations
 
@@ -558,7 +567,7 @@ DALI preprocessing works with all YOLO tasks that use the standard `LetterBox` p
 
 ### How does DALI preprocessing compare to CPU preprocessing speed?
 
-The benefit depends on your pipeline. When GPU inference is already fast with [TensorRT](../integrations/tensorrt.md), CPU preprocessing at 2-10ms can become the dominant cost. DALI eliminates this bottleneck by running preprocessing on the GPU. The biggest gains are seen with high-resolution inputs (1080p, 4K), large [batch sizes](https://www.ultralytics.com/glossary/batch-size), and systems with limited CPU cores per GPU.
+The benefit depends on your pipeline. When GPU inference is already fast with [TensorRT](../integrations/tensorrt.md), CPU preprocessing at 2-10ms can become the dominant cost. DALI eliminates this bottleneck by running preprocessing on the GPU. The biggest gains are seen with high-resolution inputs (1080p, 4K), large batch sizes, and systems with limited CPU cores per GPU.
 
 ### Can I use DALI with PyTorch models (not just TensorRT)?
 
@@ -570,8 +579,8 @@ Yes. Use `DALIGenericIterator` to get preprocessed `torch.Tensor` outputs, then 
 
 ### Does DALI produce pixel-identical results to CPU preprocessing?
 
-Nearly identical. Set `antialias=False` in `fn.resize` to match OpenCV's `cv2.INTER_LINEAR`. Minor floating-point differences (< 0.001) may occur due to GPU vs CPU arithmetic, but these have no measurable impact on detection [accuracy](https://www.ultralytics.com/glossary/accuracy).
+Nearly identical. Set `antialias=False` in `fn.resize` to match OpenCV's `cv2.INTER_LINEAR`. Minor floating-point differences (< 0.001) may occur due to GPU vs CPU arithmetic, but these have no measurable impact on detection accuracy.
 
 ### What about CV-CUDA as an alternative to DALI?
 
-[CV-CUDA](https://github.com/CVCUDA/CV-CUDA) is another NVIDIA library for GPU-accelerated vision processing. It provides per-operator control (like [OpenCV](https://www.ultralytics.com/glossary/opencv) but on GPU) rather than DALI's pipeline approach. CV-CUDA's `cvcuda.copymakeborder()` supports explicit per-side padding, making centered letterbox straightforward. Choose DALI for pipeline-based workflows (especially with [Triton](triton-inference-server.md)), and CV-CUDA for fine-grained operator-level control in custom inference code.
+[CV-CUDA](https://github.com/CVCUDA/CV-CUDA) is another NVIDIA library for GPU-accelerated vision processing. It provides per-operator control (like OpenCV but on GPU) rather than DALI's pipeline approach. CV-CUDA's `cvcuda.copymakeborder()` supports explicit per-side padding, making centered letterbox straightforward. Choose DALI for pipeline-based workflows (especially with [Triton](triton-inference-server.md)), and CV-CUDA for fine-grained operator-level control in custom inference code.

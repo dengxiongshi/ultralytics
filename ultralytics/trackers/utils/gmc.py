@@ -11,13 +11,15 @@ from ultralytics.utils import LOGGER
 
 
 class GMC:
-    """Generalized Motion Compensation (GMC) class for tracking and object detection in video frames.
+    """Generalized Motion Compensation (GMC) class for estimating camera motion between video frames.
 
-    This class provides methods for tracking and detecting objects based on several tracking algorithms including ORB,
-    SIFT, ECC, and Sparse Optical Flow. It also supports downscaling of frames for computational efficiency.
+    This class estimates a 2x3 affine warp between consecutive frames using one of several methods including ORB, SIFT,
+    ECC, and Sparse Optical Flow, so trackers can compensate for camera motion. It also supports downscaling of frames
+    for computational efficiency.
 
     Attributes:
-        method (str | None): The tracking method to use. Options include 'orb', 'sift', 'ecc', 'sparseOptFlow', None.
+        method (str | None): The motion estimation method to use. Options include 'orb', 'sift', 'ecc', 'sparseOptFlow',
+            or None (identity warp).
         downscale (int): Factor by which to downscale the frames for processing.
         prevFrame (np.ndarray | None): Previous frame for tracking.
         prevKeyPoints (tuple | np.ndarray | None): Keypoints from the previous frame.
@@ -40,12 +42,16 @@ class GMC:
         (2, 3)
     """
 
-    def __init__(self, method: str = "sparseOptFlow", downscale: int = 2) -> None:
+    def __init__(self, method: str | None = "sparseOptFlow", downscale: int = 2) -> None:
         """Initialize a Generalized Motion Compensation (GMC) object with tracking method and downscale factor.
 
         Args:
-            method (str): The tracking method to use. Options include 'orb', 'sift', 'ecc', 'sparseOptFlow', 'none'.
-            downscale (int): Downscale factor for processing frames.
+            method (str | None): The motion estimation method to use. Options include 'orb', 'sift', 'ecc',
+                'sparseOptFlow', or 'none'/None for an identity warp.
+            downscale (int): Downscale factor for processing frames, clamped to a minimum of 1.
+
+        Raises:
+            ValueError: If `method` is not a supported GMC method.
         """
         super().__init__()
 
@@ -69,9 +75,14 @@ class GMC:
             self.criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, number_of_iterations, termination_eps)
 
         elif self.method == "sparseOptFlow":
-            self.feature_params = dict(
-                maxCorners=1000, qualityLevel=0.01, minDistance=1, blockSize=3, useHarrisDetector=False, k=0.04
-            )
+            self.feature_params = {
+                "maxCorners": 400,  # over-determines the 4-DOF transform; optical flow costs one solve per corner
+                "qualityLevel": 0.01,
+                "minDistance": 0,  # integer-pixel corners: 1 rejects nothing but forces a per-pixel grid
+                "blockSize": 3,
+                "useHarrisDetector": False,
+                "k": 0.04,
+            }
 
         elif self.method in {"none", "None", None}:
             self.method = None
@@ -83,19 +94,20 @@ class GMC:
         self.prevDescriptors = None
         self.initializedFirstFrame = False
 
-    def apply(self, raw_frame: np.ndarray, detections: list | None = None) -> np.ndarray:
-        """Estimate a 2×3 motion compensation warp for a frame.
+    def apply(self, raw_frame: np.ndarray, detections: np.ndarray | list | None = None) -> np.ndarray:
+        """Estimate a 2x3 motion compensation warp for a frame.
 
         Args:
             raw_frame (np.ndarray): The raw frame to be processed, with shape (H, W, C).
-            detections (list, optional): List of detections to be used in the processing.
+            detections (np.ndarray | list, optional): Detection boxes in [x1, y1, x2, y2, ...] format whose regions are
+                excluded from keypoint detection. Only used by the 'orb' and 'sift' methods.
 
         Returns:
-            (np.ndarray): Transformation matrix with shape (2, 3).
+            (np.ndarray): Transformation matrix with shape (2, 3). Identity when `method` is None.
 
         Examples:
             >>> gmc = GMC(method="sparseOptFlow")
-            >>> raw_frame = np.random.rand(480, 640, 3)
+            >>> raw_frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
             >>> transformation_matrix = gmc.apply(raw_frame)
             >>> print(transformation_matrix.shape)
             (2, 3)
@@ -120,10 +132,10 @@ class GMC:
 
         Examples:
             >>> gmc = GMC(method="ecc")
-            >>> processed_frame = gmc.apply_ecc(np.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]))
-            >>> print(processed_frame)
-            [[1. 0. 0.]
-             [0. 1. 0.]]
+            >>> raw_frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+            >>> transformation_matrix = gmc.apply_ecc(raw_frame)
+            >>> print(transformation_matrix.shape)
+            (2, 3)
         """
         height, width, c = raw_frame.shape
         frame = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2GRAY) if c == 3 else raw_frame
@@ -147,14 +159,16 @@ class GMC:
         except Exception as e:
             LOGGER.warning(f"findTransformECC failed; using identity warp. {e}")
 
+        self.prevFrame = frame.copy()
         return H
 
-    def apply_features(self, raw_frame: np.ndarray, detections: list | None = None) -> np.ndarray:
+    def apply_features(self, raw_frame: np.ndarray, detections: np.ndarray | list | None = None) -> np.ndarray:
         """Apply feature-based methods like ORB or SIFT to a raw frame.
 
         Args:
             raw_frame (np.ndarray): The raw frame to be processed, with shape (H, W, C).
-            detections (list, optional): List of detections to be used in the processing.
+            detections (np.ndarray | list, optional): Detection boxes in [x1, y1, x2, y2, ...] format whose regions are
+                excluded from keypoint detection.
 
         Returns:
             (np.ndarray): Transformation matrix with shape (2, 3).
@@ -199,22 +213,23 @@ class GMC:
             return H
 
         # Match descriptors between previous and current frame
-        knnMatches = self.matcher.knnMatch(self.prevDescriptors, descriptors, 2)
+        knnMatches = (
+            self.matcher.knnMatch(self.prevDescriptors, descriptors, 2)
+            if self.prevDescriptors is not None and descriptors is not None
+            else []
+        )
 
         # Filter matches based on spatial distance constraints
-        matches = []
         spatialDistances = []
         maxSpatialDistance = 0.25 * np.array([width, height])
 
-        # Handle empty matches case
-        if len(knnMatches) == 0:
-            self.prevFrame = frame.copy()
-            self.prevKeyPoints = copy.copy(keypoints)
-            self.prevDescriptors = copy.copy(descriptors)
-            return H
-
         # Apply Lowe's ratio test and spatial distance filtering
-        for m, n in knnMatches:
+        prevPoints = []
+        currPoints = []
+        for matches in knnMatches:
+            if len(matches) < 2:
+                continue
+            m, n = matches
             if m.distance < 0.9 * n.distance:
                 prevKeyPointLocation = self.prevKeyPoints[m.queryIdx].pt
                 currKeyPointLocation = keypoints[m.trainIdx].pt
@@ -228,34 +243,38 @@ class GMC:
                     np.abs(spatialDistance[1]) < maxSpatialDistance[1]
                 ):
                     spatialDistances.append(spatialDistance)
-                    matches.append(m)
+                    prevPoints.append(prevKeyPointLocation)
+                    currPoints.append(currKeyPointLocation)
+
+        if not spatialDistances:
+            self.prevFrame = frame.copy()
+            self.prevKeyPoints = copy.copy(keypoints)
+            self.prevDescriptors = copy.copy(descriptors)
+            return H
 
         # Filter outliers using statistical analysis
+        spatialDistances = np.asarray(spatialDistances).reshape(-1, 2)
         meanSpatialDistances = np.mean(spatialDistances, 0)
         stdSpatialDistances = np.std(spatialDistances, 0)
-        inliers = (spatialDistances - meanSpatialDistances) < 2.5 * stdSpatialDistances
+        # Include exact-boundary and zero-variance matches.
+        inliers = np.abs(spatialDistances - meanSpatialDistances) <= 2.5 * stdSpatialDistances
 
-        # Extract good matches and corresponding points
-        goodMatches = []
-        prevPoints = []
-        currPoints = []
-        for i in range(len(matches)):
-            if inliers[i, 0] and inliers[i, 1]:
-                goodMatches.append(matches[i])
-                prevPoints.append(self.prevKeyPoints[matches[i].queryIdx].pt)
-                currPoints.append(keypoints[matches[i].trainIdx].pt)
-
-        prevPoints = np.array(prevPoints)
-        currPoints = np.array(currPoints)
+        # Keep matched point pairs that survive the outlier filter
+        good = inliers.all(axis=1)
+        prevPoints = np.asarray(prevPoints).reshape(-1, 2)[good]
+        currPoints = np.asarray(currPoints).reshape(-1, 2)[good]
 
         # Estimate transformation matrix using RANSAC
         if prevPoints.shape[0] > 4:
-            H, inliers = cv2.estimateAffinePartial2D(prevPoints, currPoints, cv2.RANSAC)
-
-            # Scale translation components back to original resolution
-            if self.downscale > 1.0:
-                H[0, 2] *= self.downscale
-                H[1, 2] *= self.downscale
+            H_est = cv2.estimateAffinePartial2D(prevPoints, currPoints, cv2.RANSAC)[0]
+            if H_est is None:  # degenerate point sets: keep identity
+                LOGGER.warning("affine estimation failed")
+            else:
+                H = H_est
+                # Scale translation components back to original resolution
+                if self.downscale > 1.0:
+                    H[0, 2] *= self.downscale
+                    H[1, 2] *= self.downscale
         else:
             LOGGER.warning("not enough matching points")
 
@@ -277,10 +296,10 @@ class GMC:
 
         Examples:
             >>> gmc = GMC()
-            >>> result = gmc.apply_sparseoptflow(np.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]))
-            >>> print(result)
-            [[1. 0. 0.]
-             [0. 1. 0.]]
+            >>> raw_frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+            >>> transformation_matrix = gmc.apply_sparseoptflow(raw_frame)
+            >>> print(transformation_matrix.shape)
+            (2, 3)
         """
         height, width, c = raw_frame.shape
         frame = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2GRAY) if c == 3 else raw_frame
@@ -304,25 +323,21 @@ class GMC:
         matchedKeypoints, status, _ = cv2.calcOpticalFlowPyrLK(self.prevFrame, frame, self.prevKeyPoints, None)
 
         # Extract successfully tracked points
-        prevPoints = []
-        currPoints = []
-
-        for i in range(len(status)):
-            if status[i]:
-                prevPoints.append(self.prevKeyPoints[i])
-                currPoints.append(matchedKeypoints[i])
-
-        prevPoints = np.array(prevPoints)
-        currPoints = np.array(currPoints)
+        good = status.ravel().astype(bool)
+        prevPoints = self.prevKeyPoints[good]
+        currPoints = matchedKeypoints[good]
 
         # Estimate transformation matrix using RANSAC
-        if (prevPoints.shape[0] > 4) and (prevPoints.shape[0] == currPoints.shape[0]):
-            H, _ = cv2.estimateAffinePartial2D(prevPoints, currPoints, cv2.RANSAC)
-
-            # Scale translation components back to original resolution
-            if self.downscale > 1.0:
-                H[0, 2] *= self.downscale
-                H[1, 2] *= self.downscale
+        if prevPoints.shape[0] > 4:
+            H_est = cv2.estimateAffinePartial2D(prevPoints, currPoints, cv2.RANSAC)[0]
+            if H_est is None:  # degenerate point sets: keep identity
+                LOGGER.warning("affine estimation failed")
+            else:
+                H = H_est
+                # Scale translation components back to original resolution
+                if self.downscale > 1.0:
+                    H[0, 2] *= self.downscale
+                    H[1, 2] *= self.downscale
         else:
             LOGGER.warning("not enough matching points")
 

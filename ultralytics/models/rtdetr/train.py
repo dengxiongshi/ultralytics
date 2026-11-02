@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from copy import copy
 
+import torch
+
+from ultralytics.data.utils import get_split_fraction
 from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.nn.tasks import RTDETRDetectionModel
 from ultralytics.utils import RANK, colorstr
@@ -19,7 +22,7 @@ class RTDETRTrainer(DetectionTrainer):
     inference speed.
 
     Attributes:
-        loss_names (tuple): Names of the loss components used for training.
+        loss_names (tuple): Names of the loss components, derived from the loss dict returned by the criterion.
         data (dict): Dataset configuration containing class count and other parameters.
         args (dict): Training arguments and hyperparameters.
         save_dir (Path): Directory to save training results.
@@ -28,7 +31,7 @@ class RTDETRTrainer(DetectionTrainer):
     Methods:
         get_model: Initialize and return an RT-DETR model for object detection tasks.
         build_dataset: Build and return an RT-DETR dataset for training or validation.
-        get_validator: Return a DetectionValidator suitable for RT-DETR model validation.
+        get_validator: Return an RTDETRValidator suitable for RT-DETR model validation.
 
     Examples:
         >>> from ultralytics.models.rtdetr.train import RTDETRTrainer
@@ -41,23 +44,25 @@ class RTDETRTrainer(DetectionTrainer):
         - AMP training can lead to NaN outputs and may produce errors during bipartite graph matching.
     """
 
-    def get_model(self, cfg: dict | None = None, weights: str | None = None, verbose: bool = True):
+    def get_model(self, cfg: str | dict | None = None, weights: torch.nn.Module | None = None, verbose: bool = True):
         """Initialize and return an RT-DETR model for object detection tasks.
 
         Args:
-            cfg (dict, optional): Model configuration.
-            weights (str, optional): Path to pre-trained model weights.
+            cfg (str | dict, optional): Model configuration file path or dictionary.
+            weights (torch.nn.Module, optional): Pretrained model whose weights are loaded into the new model.
             verbose (bool): Verbose logging if True.
 
         Returns:
             (RTDETRDetectionModel): Initialized model.
         """
-        model = RTDETRDetectionModel(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
+        model = self.set_model_names_for_load(
+            RTDETRDetectionModel(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
+        )
         if weights:
             model.load(weights)
         return model
 
-    def build_dataset(self, img_path: str, mode: str = "val", batch: int | None = None):
+    def build_dataset(self, img_path: str, mode: str = "train", batch: int | None = None):
         """Build and return an RT-DETR dataset for training or validation.
 
         Args:
@@ -80,10 +85,13 @@ class RTDETRTrainer(DetectionTrainer):
             prefix=colorstr(f"{mode}: "),
             classes=self.args.classes,
             data=self.data,
-            fraction=self.args.fraction if mode == "train" else 1.0,
+            fraction=1.0
+            if self.data.get("complete")
+            else get_split_fraction(self.args.fraction, "train" if mode == "train" else self.args.split),
         )
 
     def get_validator(self):
         """Return an RTDETRValidator suitable for RT-DETR model validation."""
-        self.loss_names = "giou_loss", "cls_loss", "l1_loss"
-        return RTDETRValidator(self.test_loader, save_dir=self.save_dir, args=copy(self.args))
+        return RTDETRValidator(
+            self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks
+        )

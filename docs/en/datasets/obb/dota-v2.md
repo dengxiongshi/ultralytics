@@ -7,7 +7,7 @@ creator:
 license:
     name: Research-Only
     url: https://captain-whu.github.io/DOTA/dataset.html
-description: Explore the DOTA dataset for object detection in aerial images, featuring 1.7M Oriented Bounding Boxes across 18 categories. Ideal for aerial image analysis.
+description: DOTA is a large-scale aerial-image object detection benchmark with up to 1.7M oriented bounding boxes across 18 categories in versions v1.0, v1.5, and v2.0.
 keywords: DOTA dataset, object detection, aerial images, oriented bounding boxes, OBB, DOTA v1.0, DOTA v1.5, DOTA v2.0, multiscale detection, Ultralytics
 ---
 
@@ -15,7 +15,9 @@ keywords: DOTA dataset, object detection, aerial images, oriented bounding boxes
 
 The [DOTA](https://captain-whu.github.io/DOTA/index.html) dataset is a large-scale benchmark for [object detection](https://www.ultralytics.com/glossary/object-detection) in aerial images, released in three versions (v1.0, v1.5, v2.0) with up to 1.7M [Oriented Bounding Box (OBB)](index.md) annotations across 18 categories, captured from diverse aerial sensors and platforms.
 
-![DOTA dataset object classes for aerial detection](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/dota-classes-visual.avif)
+Explore the officially hosted [DOTA v1.5](https://platform.ultralytics.com/ultralytics/datasets/dotav1-5) and [DOTA v1.0](https://platform.ultralytics.com/ultralytics/datasets/dotav1) datasets on Ultralytics Platform to preview their oriented annotations, inspect statistics, and clone them for training.
+
+![DOTA dataset object classes for aerial detection](https://cdn.ul.run/i/6e5661d90a5751378dff73cbcd25cef2.avif)
 
 ## Key Features
 
@@ -55,7 +57,7 @@ The [DOTA](https://captain-whu.github.io/DOTA/index.html) dataset is a large-sca
 
 - Collections from Google Earth, GF-2 Satellite, and other aerial images.
 - Contains 18 common categories.
-- Comprises 11,268 images with a whopping 1,793,658 instances.
+- Comprises 11,268 images with 1,793,658 instances.
 - New categories introduced: "airport" and "helipad".
 - Image splits:
     - Training: 1,830 images with 268,627 instances.
@@ -72,7 +74,7 @@ DOTA exhibits a structured layout tailored for OBB object detection challenges:
 
 ## Applications
 
-DOTA serves as a benchmark for training and evaluating models specifically tailored for aerial image analysis. With the inclusion of OBB annotations, it provides a unique challenge, enabling the development of specialized [object detection](../../tasks/detect.md) models that cater to aerial imagery's nuances. The dataset is particularly valuable for applications in remote sensing, surveillance, and environmental monitoring.
+DOTA serves as a benchmark for training and evaluating models built for aerial image analysis. Its [oriented bounding box](https://www.ultralytics.com/blog/what-is-oriented-bounding-box-obb-detection-a-quick-guide) annotations make it a demanding test for [object detection](../../tasks/detect.md) models on rotated, densely packed aerial targets. The dataset is widely used in [remote sensing](https://www.ultralytics.com/glossary/satellite-image-analysis), surveillance, and environmental monitoring.
 
 ## Dataset YAML
 
@@ -91,7 +93,7 @@ Use the YAML that matches the release you downloaded, or author a custom YAML if
 
 ## Split DOTA images
 
-The raw imagery routinely exceeds 10,000 pixels on a side, so tiling is required before feeding the data to YOLO. Use the helper below to slice the source imagery into overlapping 1024 × 1024 crops at multiple scales while keeping the annotations in sync.
+The raw imagery routinely exceeds 10,000 pixels on a side, so tiling is recommended before feeding the data to YOLO. Use the helper below to slice the source imagery into overlapping 1024 × 1024 crops at multiple scales while keeping the annotations in sync.
 
 !!! example "Split images"
 
@@ -122,11 +124,11 @@ The raw imagery routinely exceeds 10,000 pixels on a side, so tiling is required
 
 ## Usage
 
-To train a model on the DOTA v1 dataset, you can utilize the following code snippets. Always refer to your model's documentation for a thorough list of available arguments. For those looking to experiment with a smaller subset first, consider using the [DOTA8 dataset](dota8.md), which contains just 8 images for quick testing and is browsable on [Ultralytics Platform](https://platform.ultralytics.com/ultralytics/datasets/dota8).
+To train a [YOLO26n-obb](https://platform.ultralytics.com/ultralytics/yolo26/yolo26n-obb) model on the DOTA v1 dataset, use the following code snippets. Always refer to your model's documentation for a thorough list of available arguments. For those looking to experiment with a smaller subset first, consider using the [DOTA8 dataset](dota8.md), which contains just 8 images for quick testing and is browsable on [Ultralytics Platform](https://platform.ultralytics.com/ultralytics/datasets/dota8).
 
 !!! warning
 
-    Please note that all images and associated annotations in the DOTAv1 dataset can be used for academic purposes, but commercial use is prohibited. Your understanding and respect for the dataset creators' wishes are greatly appreciated!
+    All images and associated annotations in the DOTAv1 dataset can be used for academic purposes only; commercial use is prohibited.
 
 !!! example "Train Example"
 
@@ -135,8 +137,8 @@ To train a model on the DOTA v1 dataset, you can utilize the following code snip
         ```python
         from ultralytics import YOLO
 
-        # Create a new YOLO26n-OBB model from scratch
-        model = YOLO("yolo26n-obb.yaml")
+        # Load a pretrained YOLO26n-OBB model
+        model = YOLO("yolo26n-obb.pt")
 
         # Train the model on the DOTAv1 dataset
         results = model.train(data="DOTAv1.yaml", epochs=100, imgsz=1024)
@@ -145,25 +147,25 @@ To train a model on the DOTA v1 dataset, you can utilize the following code snip
     === "CLI"
 
         ```bash
-        # Train a new YOLO26n-OBB model on the DOTAv1 dataset
+        # Train a pretrained YOLO26n-OBB model on the DOTAv1 dataset
         yolo obb train data=DOTAv1.yaml model=yolo26n-obb.pt epochs=100 imgsz=1024
         ```
 
 ## Sample Data and Annotations
 
-Having a glance at the dataset illustrates its depth:
+The sample below shows typical DOTA scenes and annotations:
 
-![DOTA dataset  with oriented bounding box annotations](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/instances-DOTA.avif)
+![DOTA dataset with oriented bounding box annotations](https://cdn.ul.run/i/088eb7273a274b58c389da29578dfe28.avif)
 
 - **DOTA examples**: This snapshot underlines the complexity of aerial scenes and the significance of Oriented [Bounding Box](https://www.ultralytics.com/glossary/bounding-box) annotations, capturing objects in their natural orientation.
 
-The dataset's richness offers invaluable insights into object detection challenges exclusive to aerial imagery. The [DOTA-v2.0 dataset](https://www.ultralytics.com/blog/exploring-the-best-computer-vision-datasets-in-2025) has become particularly popular for remote sensing and aerial surveillance projects due to its comprehensive annotations and diverse object categories.
+These scenes highlight detection challenges specific to aerial imagery. DOTA-v2.0 is widely used for remote sensing and aerial surveillance projects thanks to its comprehensive annotations and diverse object categories.
 
 ## Citations and Acknowledgments
 
 If you use DOTA in your work, please cite the relevant research papers:
 
-!!! quote ""
+!!! quote "Citation"
 
     === "BibTeX"
 
@@ -180,7 +182,7 @@ If you use DOTA in your work, please cite the relevant research papers:
         }
         ```
 
-A special note of gratitude to the team behind the DOTA datasets for their commendable effort in curating this dataset. For an exhaustive understanding of the dataset and its nuances, please visit the [official DOTA website](https://captain-whu.github.io/DOTA/index.html).
+We thank the team behind the DOTA datasets for curating them. For full details on the dataset, visit the [official DOTA website](https://captain-whu.github.io/DOTA/index.html).
 
 ## FAQ
 
@@ -190,7 +192,7 @@ The [DOTA dataset](https://captain-whu.github.io/DOTA/index.html) is a specializ
 
 ### How does the DOTA dataset handle different scales and orientations in images?
 
-DOTA utilizes Oriented Bounding Boxes (OBB) for annotation, which are represented by rotated rectangles encapsulating objects regardless of their orientation. This method ensures that objects, whether small or at different angles, are accurately captured. The dataset's multiscale images, ranging from 800 × 800 to 20,000 × 20,000 pixels, further allow for the detection of both small and large objects effectively. This approach is particularly valuable for aerial imagery where objects appear at various angles and scales.
+DOTA uses Oriented Bounding Boxes (OBB) for annotation, which are represented by rotated rectangles encapsulating objects regardless of their orientation. This method ensures that objects, whether small or at different angles, are accurately captured. The dataset's multiscale images, ranging from 800 × 800 to 20,000 × 20,000 pixels, further allow for the detection of both small and large objects effectively. This approach is particularly valuable for aerial imagery where objects appear at various angles and scales.
 
 ### How can I train a model using the DOTA dataset?
 
@@ -203,8 +205,8 @@ To train a model on the DOTA dataset, you can use the following example with [Ul
         ```python
         from ultralytics import YOLO
 
-        # Create a new YOLO26n-OBB model from scratch
-        model = YOLO("yolo26n-obb.yaml")
+        # Load a pretrained YOLO26n-OBB model
+        model = YOLO("yolo26n-obb.pt")
 
         # Train the model on the DOTAv1 dataset
         results = model.train(data="DOTAv1.yaml", epochs=100, imgsz=1024)
@@ -213,7 +215,7 @@ To train a model on the DOTA dataset, you can use the following example with [Ul
     === "CLI"
 
         ```bash
-        # Train a new YOLO26n-OBB model on the DOTAv1 dataset
+        # Train a pretrained YOLO26n-OBB model on the DOTAv1 dataset
         yolo obb train data=DOTAv1.yaml model=yolo26n-obb.pt epochs=100 imgsz=1024
         ```
 

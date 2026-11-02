@@ -1,33 +1,33 @@
 ---
 title: YOLO26 ExecuTorch for Mobile & Edge
 comments: true
-description: Export YOLO26 models to ExecuTorch format for efficient on-device inference on mobile and edge devices. Optimize your AI models for iOS, Android, and embedded systems.
+description: Export Ultralytics YOLO26 to the ExecuTorch .pte format for on-device inference on iOS, Android, and embedded Linux, with XNNPACK CPU acceleration.
 keywords: Ultralytics, YOLO26, ExecuTorch, model export, PyTorch, edge AI, mobile deployment, on-device inference, XNNPACK, embedded systems
 ---
 
 # Deploy YOLO26 on Mobile & Edge with ExecuTorch
 
-Deploying computer vision models on edge devices like smartphones, tablets, and embedded systems requires an optimized runtime that balances performance with resource constraints. ExecuTorch, PyTorch's solution for edge computing, enables efficient on-device inference for [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) models.
+Deploying [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) models on edge devices like smartphones, tablets, and embedded systems requires an optimized runtime that balances performance with resource constraints. ExecuTorch, PyTorch's solution for [edge computing](https://www.ultralytics.com/glossary/edge-computing), enables efficient on-device inference for [Ultralytics YOLO](../models/index.md) models.
 
 This guide outlines how to export Ultralytics YOLO models to ExecuTorch format, enabling you to deploy your models on mobile and edge devices with optimized performance.
 
 ## Why export to ExecuTorch?
 
 <p align="center">
-  <img width="100%" src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/executorch-pipeline.avif" alt="PyTorch ExecuTorch mobile inference framework">
+  <img width="100%" src="https://cdn.ul.run/i/11dc46f6702048f937a7b6f39f53f05a.avif" alt="PyTorch ExecuTorch mobile inference framework">
 </p>
 
 [ExecuTorch](https://docs.pytorch.org/executorch/) is PyTorch's end-to-end solution for enabling on-device inference capabilities across mobile and edge devices. Built with the goal of being portable and efficient, ExecuTorch can be used to run PyTorch programs on a wide variety of computing platforms.
 
 ## Key features of ExecuTorch
 
-ExecuTorch provides several powerful features for deploying Ultralytics YOLO models on edge devices:
+ExecuTorch provides several features for deploying Ultralytics YOLO models on edge devices:
 
 - **Portable Model Format**: ExecuTorch uses the `.pte` (PyTorch ExecuTorch) format, which is optimized for size and loading speed on resource-constrained devices.
 
-- **XNNPACK Backend**: Default integration with XNNPACK provides highly optimized inference on mobile CPUs, delivering excellent performance without requiring specialized hardware.
+- **XNNPACK Backend**: Default integration with XNNPACK provides highly optimized inference on mobile CPUs, delivering strong performance without requiring specialized hardware.
 
-- **Quantization Ready**: The ExecuTorch ecosystem supports quantization techniques to reduce model size and improve inference speed; Ultralytics currently exports FP32 models via the XNNPACK backend.
+- **Quantization Ready**: The ExecuTorch ecosystem supports [quantization](https://www.ultralytics.com/glossary/model-quantization) techniques to reduce model size and improve inference speed; Ultralytics currently exports FP32 models via the XNNPACK backend.
 
 - **Memory Efficiency**: Optimized memory management reduces runtime memory footprint, making it suitable for devices with limited RAM.
 
@@ -45,13 +45,19 @@ ExecuTorch models can be deployed across various edge and mobile platforms:
 
 - **IoT Devices**: Integrate into IoT devices for on-device inference without cloud connectivity requirements.
 
+## Supported Tasks
+
+ExecuTorch export supports all seven Ultralytics tasks. Semantic segmentation and depth estimation are available only with YOLO26, the only family that ships those heads.
+
+{% include "macros/supported-tasks.md" %}
+
 ## Exporting Ultralytics YOLO26 Models to ExecuTorch
 
 Converting Ultralytics YOLO26 models to ExecuTorch format enables efficient deployment on mobile and edge devices.
 
 ### Installation
 
-ExecuTorch export requires Python 3.10-3.13 and PyTorch >= 2.9.0 along with the `executorch` package:
+ExecuTorch export requires Python 3.10-3.14 and PyTorch >= 2.9.0. Ultralytics installs a compatible `executorch` package when you export or load an ExecuTorch model, pinned to `executorch<1.5` on PyTorch older than 2.13, so do not upgrade it by hand.
 
 !!! tip "Installation"
 
@@ -66,7 +72,7 @@ For detailed instructions and best practices related to the installation process
 
 ### Usage
 
-Exporting YOLO26 models to ExecuTorch is straightforward:
+Exporting YOLO26 models to ExecuTorch takes a single command.
 
 The ExecuTorch format supports the [Export](../modes/export.md), [Predict](../modes/predict.md), and [Validate](../modes/val.md) modes. Export your model, then load the exported model to run inference or validate its accuracy.
 
@@ -133,7 +139,7 @@ The ExecuTorch format supports the [Export](../modes/export.md), [Predict](../mo
         yolo val model=yolo26n_executorch_model data=coco8.yaml
         ```
 
-    ExecuTorch exports generate a directory that includes a `.pte` file and metadata. Use the ExecuTorch runtime in your mobile or embedded application to load the `.pte` model and perform inference.
+ExecuTorch exports generate a directory that includes a `.pte` file and metadata. Use the ExecuTorch runtime in your mobile or embedded application to load the `.pte` model and perform inference.
 
 ### Export Arguments
 
@@ -169,11 +175,13 @@ For mobile applications (iOS/Android), you'll need to:
 2. **Load Model**: Load the `.pte` file in your application
 3. **Run Inference**: Process images and get predictions
 
+#### iOS
+
 Example iOS integration (Objective-C/C++):
 
 ```objc
 // iOS uses C++ APIs for model loading and inference
-// See https://pytorch.org/executorch/stable/using-executorch-ios.html for complete examples
+// See https://docs.pytorch.org/executorch/stable/using-executorch-ios.html for complete examples
 
 #include <executorch/extension/module/module.h>
 
@@ -188,6 +196,16 @@ auto tensor = from_blob(input, {1, 3, 640, 640});
 
 // Run inference
 const auto result = module.forward(tensor);
+```
+
+#### Android
+
+Add the [ExecuTorch Android AAR](https://docs.pytorch.org/executorch/stable/using-executorch-android.html) from Maven Central:
+
+```kotlin
+dependencies {
+    implementation("org.pytorch:executorch-android:<version>")
+}
 ```
 
 Example Android integration (Kotlin):
@@ -206,7 +224,7 @@ val inputEValue = EValue.from(inputTensor)
 
 // Run inference
 val outputs = module.forward(inputEValue)
-val scores = outputs[0].toTensor().dataAsFloatArray
+val predictions = outputs[0].toTensor().dataAsFloatArray
 ```
 
 ### Embedded Linux
@@ -238,9 +256,9 @@ For more details on integrating ExecuTorch into your applications, visit the [Ex
 
 To reduce model size for deployment:
 
-- **Use Smaller Models**: Start with YOLO26n (nano) for the smallest footprint
+- **Use Smaller Models**: Start with [YOLO26n](https://platform.ultralytics.com/ultralytics/yolo26/yolo26n) (nano) for the smallest footprint
 - **Lower Input Resolution**: Use smaller image sizes (e.g., `imgsz=320` or `imgsz=416`)
-- **Quantization**: Apply quantization techniques (supported in future ExecuTorch versions)
+- **Quantization**: Apply ExecuTorch quantization techniques outside Ultralytics (Ultralytics ExecuTorch export is FP32 only)
 
 ### Inference Speed Optimization
 
@@ -258,12 +276,12 @@ The Ultralytics team benchmarked YOLO26 models, comparing speed and accuracy bet
 
     === "Raspberry Pi 5"
 
-        | Model   | Format      | Status | Size (MB) | metrics/mAP50-95(B) | Inference time (ms/im) |
-        | ------- | ----------- | ------ | --------- | ------------------- | ---------------------- |
-        | YOLO26n | PyTorch     | ✅     | 5.3       | 0.4790              | 314.80                  |
-        | YOLO26n | ExecuTorch  | ✅     | 9.4        | 0.4800              | 142                    |
-        | YOLO26s | PyTorch     | ✅     | 19.5       | 0.5730             | 930.90                 |
-        | YOLO26s | ExecuTorch  | ✅     | 36.5        | 0.5780              | 376.1                 |
+        | Model   | Format     | Status | Size (MB) | metrics/mAP50-95(B) | Inference time (ms/im) |
+        | ------- | ---------- | ------ | --------- | ------------------- | ---------------------- |
+        | YOLO26n | PyTorch    | ✅     | 5.3       | 0.4790              | 314.80                 |
+        | YOLO26n | ExecuTorch | ✅     | 9.4       | 0.4800              | 142                    |
+        | YOLO26s | PyTorch    | ✅     | 19.5      | 0.5730              | 930.90                 |
+        | YOLO26s | ExecuTorch | ✅     | 36.5      | 0.5780              | 376.1                  |
 
     === "More devices coming soon!"
 
@@ -271,7 +289,7 @@ The Ultralytics team benchmarked YOLO26 models, comparing speed and accuracy bet
 
     !!! note
 
-        Inference time does not include pre/ post-processing.
+        Inference time does not include pre/post-processing.
 
 ## Troubleshooting
 
@@ -279,43 +297,27 @@ The Ultralytics team benchmarked YOLO26 models, comparing speed and accuracy bet
 
 **Issue**: `Python version error`
 
-**Solution**: ExecuTorch requires Python 3.10 or higher. Upgrade your Python installation:
+**Solution**: ExecuTorch requires Python 3.10 to 3.14. Create an environment with a supported version:
 
 ```bash
 # Using conda
-conda create -n executorch python=3.10
+conda create -n executorch python=3.14
 conda activate executorch
-```
-
-**Issue**: `Export fails during first run`
-
-**Solution**: Ensure you have the latest prebuilt `executorch` wheel installed:
-
-```bash
-pip install --upgrade executorch
-```
-
-**Issue**: `Import errors for ExecuTorch modules`
-
-**Solution**: Ensure ExecuTorch is properly installed:
-
-```bash
-pip install executorch --force-reinstall
 ```
 
 For more troubleshooting help, visit the [Ultralytics GitHub Issues](https://github.com/ultralytics/ultralytics/issues) or the [ExecuTorch Documentation](https://docs.pytorch.org/executorch/stable/getting-started-setup.html).
 
 ## Summary
 
-Exporting YOLO26 models to ExecuTorch format enables efficient deployment on mobile and edge devices. With PyTorch-native integration, cross-platform support, and optimized performance, ExecuTorch is an excellent choice for edge AI applications.
+Exporting YOLO26 models to ExecuTorch format enables efficient [deployment on mobile and edge devices](https://www.ultralytics.com/blog/deploy-ultralytics-yolo-models-using-the-executorch-integration). With PyTorch-native integration, cross-platform support, and optimized performance, ExecuTorch is a strong choice for [edge AI](https://www.ultralytics.com/glossary/edge-ai) applications.
 
 Key takeaways:
 
-- ExecuTorch provides PyTorch-native edge deployment with excellent performance
-- Export is simple with `format='executorch'` parameter
+- ExecuTorch provides PyTorch-native edge deployment with strong performance
+- Export with the `format='executorch'` argument
 - Models are optimized for mobile CPUs via XNNPACK backend
 - Supports iOS, Android, and embedded Linux platforms
-- Requires Python 3.10-3.13 and PyTorch >= 2.9.0
+- Requires Python 3.10-3.14 and PyTorch >= 2.9.0
 
 ## FAQ
 
@@ -340,8 +342,8 @@ yolo export model=yolo26n.pt format=executorch
 
 ExecuTorch export requires:
 
-- Python 3.10 or higher
-- `executorch` package (install via `pip install executorch`)
+- Python 3.10 to 3.14
+- `executorch` package, installed automatically (`executorch<1.5` on PyTorch older than 2.13, which newer ExecuTorch runtimes do not support)
 - PyTorch (installed automatically with ultralytics)
 
 Note: The `executorch` package ships prebuilt wheels (with the XNNPACK backend), so no extra compilation step is required during export.
@@ -360,7 +362,7 @@ ExecuTorch supports:
 
 ### How does ExecuTorch compare to LiteRT for mobile deployment?
 
-Both ExecuTorch and [LiteRT](litert.md) are excellent for mobile deployment:
+Both ExecuTorch and [LiteRT](litert.md) are well suited to mobile deployment:
 
 - **ExecuTorch**: Better PyTorch integration, native PyTorch workflow, growing ecosystem
 - **LiteRT**: More mature, wider hardware support, more deployment examples, and runs the same model on Android, iOS, and the browser
@@ -369,7 +371,7 @@ Choose ExecuTorch if you're already using PyTorch and want a native deployment p
 
 ### Can I use ExecuTorch models with GPU acceleration?
 
-Yes! ExecuTorch supports hardware acceleration through various backends:
+Yes. ExecuTorch supports hardware acceleration through various backends:
 
 - **Mobile GPU**: Via Vulkan, Metal, or OpenCL delegates
 - **NPU/DSP**: Via platform-specific delegates

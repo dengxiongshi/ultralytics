@@ -1,27 +1,27 @@
 ---
 title: YOLO26 ClearML Integration for MLOps
 comments: true
-description: Discover how to integrate YOLO26 with ClearML to streamline your MLOps workflow, automate experiments, and enhance model management effortlessly.
+description: Integrate Ultralytics YOLO26 with ClearML to log training runs automatically, compare experiments, run remote jobs with ClearML Agent, and version datasets.
 keywords: YOLO26, ClearML, MLOps, Ultralytics, machine learning, object detection, model training, automation, experiment management
 ---
 
 # Training YOLO26 with ClearML: Streamlining Your MLOps Workflow
 
-MLOps bridges the gap between creating and deploying [machine learning](https://www.ultralytics.com/glossary/machine-learning-ml) models in real-world settings. It focuses on efficient deployment, scalability, and ongoing management to ensure models perform well in practical applications.
+[MLOps](https://www.ultralytics.com/glossary/machine-learning-operations-mlops) bridges the gap between creating and deploying [machine learning](https://www.ultralytics.com/glossary/machine-learning-ml) models in real-world settings. It focuses on efficient deployment, scalability, and ongoing management to ensure models perform well in practical applications.
 
-[Ultralytics YOLO26](https://www.ultralytics.com/) effortlessly integrates with ClearML, streamlining and enhancing your [object detection](https://www.ultralytics.com/glossary/object-detection) model's training and management. This guide will walk you through the integration process, detailing how to set up ClearML, manage experiments, automate model management, and collaborate effectively.
+[Ultralytics YOLO26](../models/yolo26.md) integrates with ClearML to track and manage the training of your [object detection](https://www.ultralytics.com/glossary/object-detection) models. This guide will walk you through the integration process, detailing how to set up ClearML, manage experiments, automate model management, and collaborate effectively.
 
 ## ClearML
 
 <p align="center">
-  <img width="100%" src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/clearml-overview.avif" alt="ClearML MLOps platform dashboard">
+  <img width="100%" src="https://cdn.ul.run/i/d20155d7401dfbd70a5e486371ff32f1.avif" alt="ClearML MLOps platform dashboard">
 </p>
 
-[ClearML](https://clear.ml/) is an innovative open-source MLOps platform that is skillfully designed to automate, monitor, and orchestrate machine learning workflows. Its key features include automated logging of all training and inference data for full experiment reproducibility, an intuitive web UI for easy [data visualization](https://www.ultralytics.com/glossary/data-visualization) and analysis, advanced hyperparameter [optimization algorithms](https://www.ultralytics.com/glossary/optimization-algorithm), and robust model management for efficient deployment across various platforms.
+[ClearML](https://clear.ml/) is an open-source MLOps platform designed to automate, monitor, and orchestrate machine learning workflows. Its key features include automated logging of training and inference data for experiment reproducibility, a web UI for [data visualization](https://www.ultralytics.com/glossary/data-visualization) and analysis, hyperparameter [optimization algorithms](https://www.ultralytics.com/glossary/optimization-algorithm), and model management for deployment across platforms.
 
 ## YOLO26 Training with ClearML
 
-You can bring automation and efficiency to your machine learning workflow by integrating YOLO26 with ClearML to improve your training process.
+Integrating YOLO26 with ClearML automates experiment logging and makes training runs easier to reproduce and compare.
 
 ## Installation
 
@@ -40,7 +40,7 @@ For detailed instructions and best practices related to the installation process
 
 ## Configuring ClearML
 
-Once you have installed the necessary packages, the next step is to initialize and configure your ClearML SDK. This involves setting up your ClearML account and obtaining the necessary credentials for a seamless connection between your development environment and the ClearML server.
+Once you have installed the necessary packages, the next step is to initialize and configure your ClearML SDK. This involves setting up your ClearML account and obtaining the credentials that connect your development environment to the ClearML server.
 
 Begin by initializing the ClearML SDK in your environment. The `clearml-init` command starts the setup process and prompts you for the necessary credentials.
 
@@ -57,48 +57,26 @@ After executing this command, visit the [ClearML Settings page](https://app.clea
 
 ## Usage
 
-Before diving into the usage instructions, be sure to check out the range of [YOLO26 models offered by Ultralytics](../models/index.md). This will help you choose the most appropriate model for your project requirements.
-
 !!! example "Usage"
 
     === "Python"
 
         ```python
-        from clearml import Task
-
         from ultralytics import YOLO
 
-        # Step 1: Creating a ClearML Task
-        task = Task.init(project_name="my_project", task_name="my_yolo26_task")
-
-        # Step 2: Selecting the YOLO26 Model
-        model_variant = "yolo26n"
-        task.set_parameter("model_variant", model_variant)
-
-        # Step 3: Loading the YOLO26 Model
-        model = YOLO(f"{model_variant}.pt")
-
-        # Step 4: Setting Up Training Arguments
-        args = dict(data="coco8.yaml", epochs=16)
-        task.connect(args)
-
-        # Step 5: Initiating Model Training
-        results = model.train(**args)
+        # The callback creates and connects the ClearML task automatically
+        model = YOLO("yolo26n.pt")
+        results = model.train(
+            data="coco8.yaml",
+            epochs=16,
+            project="my_project",
+            name="my_yolo26_task",
+        )
         ```
 
 ### Understanding the Code
 
-Let's understand the steps showcased in the usage code snippet above.
-
-**Step 1: Creating a ClearML Task**: A new task is initialized in ClearML, specifying your project and task names. This task will track and manage your model's training.
-
-**Step 2: Selecting the YOLO26 Model**: The `model_variant` variable is set to 'yolo26n', one of the YOLO26 models. This variant is then logged in ClearML for tracking.
-
-**Step 3: Loading the YOLO26 Model**: The selected YOLO26 model is loaded using Ultralytics' YOLO class, preparing it for training.
-
-**Step 4: Setting Up Training Arguments**: Key training arguments like the dataset (`coco8.yaml`) and the number of [epochs](https://www.ultralytics.com/glossary/epoch) (`16`) are organized in a dictionary and connected to the ClearML task. This allows for tracking and potential modification via the ClearML UI. For a detailed understanding of the model training process and best practices, refer to our [YOLO26 Model Training guide](../modes/train.md).
-
-**Step 5: Initiating Model Training**: The model training is started with the specified arguments. The results of the training process are captured in the `results` variable.
+Once ClearML is installed and configured, its callback is enabled by default. It creates a task when training starts, uses the YOLO `project` and `name` arguments for the ClearML project and task names, and connects the training arguments automatically. Run `yolo settings clearml=False` to disable the integration. For training options and best practices, see the [YOLO26 Model Training guide](../modes/train.md).
 
 ### Understanding the Output
 
@@ -108,7 +86,7 @@ Upon running the usage code snippet above, you can expect the following output:
 - An informational message about the script code being stored, indicating that the code execution is being tracked by ClearML.
 - A URL link to the ClearML results page where you can monitor the training progress and view detailed logs.
 - Download progress for the YOLO26 model and the specified dataset, followed by a summary of the model architecture and training configuration.
-- Initialization messages for various training components like TensorBoard, Automatic [Mixed Precision](https://www.ultralytics.com/glossary/mixed-precision) (AMP), and dataset preparation.
+- Initialization messages for various training components like Automatic [Mixed Precision](https://www.ultralytics.com/glossary/mixed-precision) (AMP) and dataset preparation.
 - Finally, the training process starts, with progress updates as the model trains on the specified dataset. For an in-depth understanding of the performance metrics used during training, read [our guide on performance metrics](../guides/yolo-performance-metrics.md).
 
 ### Viewing the ClearML Results Page
@@ -156,7 +134,7 @@ ClearML offers several advanced features to enhance your MLOps experience.
 
 #### Remote Execution
 
-ClearML's remote execution feature facilitates the reproduction and manipulation of experiments on different machines. It logs essential details like installed packages and uncommitted changes. When a task is enqueued, the [ClearML Agent](https://docs.clear.ml/docs/latest/docs/clearml_agent/) pulls it, recreates the environment, and runs the experiment, reporting back with detailed results.
+ClearML's [remote execution feature](https://www.ultralytics.com/blog/remotely-train-and-monitor-yolov5-using-clearml) facilitates the reproduction and manipulation of experiments on different machines. It logs essential details like installed packages and uncommitted changes. When a task is enqueued, the [ClearML Agent](https://docs.clear.ml/docs/latest/docs/clearml_agent/) pulls it, recreates the environment, and runs the experiment, reporting back with detailed results.
 
 Deploying a ClearML Agent is straightforward and can be done on various machines using the following command:
 
@@ -168,15 +146,15 @@ This setup is applicable to cloud VMs, local GPUs, or laptops. [ClearML Autoscal
 
 ### Cloning, Editing, and Enqueuing
 
-ClearML's user-friendly interface allows easy cloning, editing, and enqueuing of tasks. Users can clone an existing experiment, adjust parameters or other details through the UI, and enqueue the task for execution. This streamlined process ensures that the ClearML Agent executing the task uses updated configurations, making it ideal for iterative experimentation and model fine-tuning.
+ClearML's user-friendly interface allows easy cloning, editing, and enqueuing of tasks. Users can clone an existing experiment, adjust parameters or other details through the UI, and enqueue the task for execution. This streamlined process ensures that the ClearML Agent executing the task uses updated configurations, making it ideal for iterative experimentation and model [fine-tuning](https://www.ultralytics.com/glossary/fine-tuning).
 
 <p align="center"><br>
-  <img width="100%" src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/cloning-editing-enqueuing-clearml.avif" alt="Cloning, Editing, and Enqueuing with ClearML">
+  <video width="100%" src="https://cdn.ul.run/v/0bda035ae9950163a7148c89b28e5023.mp4" autoplay loop muted playsinline aria-label="Cloning, Editing, and Enqueuing with ClearML"></video>
 </p>
 
 ## Dataset Version Management
 
-ClearML also offers powerful [dataset version management](https://docs.clear.ml/docs/latest/docs/hyperdatasets/dataset/) capabilities that integrate seamlessly with YOLO26 training workflows. This feature allows you to:
+ClearML also offers [dataset version management](https://docs.clear.ml/docs/latest/docs/clearml_data/) that works with YOLO26 training workflows. This feature allows you to:
 
 - Version your datasets separately from your code
 - Track which dataset version was used for each experiment
@@ -197,11 +175,9 @@ This command will create a versioned dataset in ClearML that can be referenced i
 
 ## Summary
 
-This guide has led you through the process of integrating ClearML with Ultralytics' YOLO26. Covering everything from initial setup to advanced model management, you've discovered how to leverage ClearML for efficient training, experiment tracking, and workflow optimization in your machine learning projects.
+This guide has led you through the process of integrating ClearML with Ultralytics' YOLO26. Covering everything from initial setup to advanced model management, you've seen how to use ClearML for efficient training, [experiment tracking](https://www.ultralytics.com/glossary/experiment-tracking), and workflow optimization in your machine learning projects.
 
 For further details on usage, visit [ClearML's official YOLOv8 integration guide](https://docs.clear.ml/docs/latest/docs/integrations/yolov8/), which also applies to YOLO26 workflows.
-
-Additionally, explore more integrations and capabilities of Ultralytics by visiting the [Ultralytics integration guide page](../integrations/index.md), which is a treasure trove of resources and insights.
 
 ## FAQ
 
@@ -223,7 +199,7 @@ You then configure ClearML with your credentials from the [ClearML Settings page
 
 ### Why should I use ClearML with Ultralytics YOLO26 for my machine learning projects?
 
-Using ClearML with Ultralytics YOLO26 enhances your machine learning projects by automating experiment tracking, streamlining workflows, and enabling robust model management. ClearML offers real-time metrics tracking, resource utilization monitoring, and a user-friendly interface for comparing experiments. These features help optimize your model's performance and make the development process more efficient. Learn more about the benefits and procedures in our [MLOps Integration guide](../modes/train.md).
+Using ClearML with Ultralytics YOLO26 enhances your machine learning projects by automating experiment tracking, streamlining workflows, and enabling robust model management. ClearML offers real-time metrics tracking, resource utilization monitoring, and a user-friendly interface for comparing experiments. These features help optimize your model's performance and make the development process more efficient. Learn more about the benefits and procedures in our [YOLO26 Model Training guide](../modes/train.md).
 
 ### How do I troubleshoot common issues during YOLO26 and ClearML integration?
 
@@ -231,32 +207,16 @@ If you encounter issues during the integration of YOLO26 with ClearML, consult o
 
 ### How do I set up the ClearML task for YOLO26 model training?
 
-Setting up a ClearML task for YOLO26 training involves initializing a task, selecting the model variant, loading the model, setting up training arguments, and finally, starting the model training. Here's a simplified example:
+After `clearml-init`, start training normally. The callback creates the ClearML task and connects the training arguments automatically:
 
 ```python
-from clearml import Task
-
 from ultralytics import YOLO
 
-# Step 1: Creating a ClearML Task
-task = Task.init(project_name="my_project", task_name="my_yolo26_task")
-
-# Step 2: Selecting the YOLO26 Model
-model_variant = "yolo26n"
-task.set_parameter("model_variant", model_variant)
-
-# Step 3: Loading the YOLO26 Model
-model = YOLO(f"{model_variant}.pt")
-
-# Step 4: Setting Up Training Arguments
-args = dict(data="coco8.yaml", epochs=16)
-task.connect(args)
-
-# Step 5: Initiating Model Training
-results = model.train(**args)
+model = YOLO("yolo26n.pt")
+results = model.train(data="coco8.yaml", epochs=16, project="my_project", name="my_yolo26_task")
 ```
 
-Refer to our [Usage guide](#usage) for a detailed breakdown of these steps.
+The YOLO `project` and `name` arguments become the ClearML project and task names. See the [Usage guide](#usage) for details.
 
 ### Where can I view the results of my YOLO26 training in ClearML?
 

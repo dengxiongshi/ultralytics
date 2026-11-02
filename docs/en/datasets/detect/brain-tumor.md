@@ -3,7 +3,7 @@ title: Brain Tumor Detection Dataset
 comments: true
 creator:
     name: Ultralytics
-    url: https://www.ultralytics.com/
+    url: https://www.ultralytics.com
 license:
     name: AGPL-3.0
     url: https://www.ultralytics.com/license
@@ -48,9 +48,9 @@ Explore [Brain Tumor on Ultralytics Platform](https://platform.ultralytics.com/u
 
 ## Applications
 
-Brain tumor detection with [computer vision](../../tasks/detect.md) enables [early diagnosis](https://www.ultralytics.com/blog/ai-and-radiology-a-new-era-of-precision-and-efficiency), treatment planning, and tumor-progression monitoring. By analyzing MRI or CT scans, detection models accurately locate tumors, supporting timely medical intervention and personalized treatment.
+Brain tumor [detection](../../tasks/detect.md) with computer vision enables [early diagnosis](https://www.ultralytics.com/blog/ai-and-radiology-a-new-era-of-precision-and-efficiency), treatment planning, and tumor-progression monitoring. By analyzing MRI or CT scans, detection models [locate tumors](https://platform.ultralytics.com/ultralytics/solutions/brain-tumor-detection-yolo26s), supporting timely medical intervention and personalized treatment.
 
-Medical professionals can leverage this technology to:
+Medical professionals can use this technology to:
 
 - Reduce diagnostic time and improve accuracy
 - Assist in surgical planning by precisely locating tumors
@@ -69,7 +69,7 @@ A YAML file defines the dataset configuration, including paths, classes, and oth
 
 ## Usage
 
-To train a [YOLO26](../../models/yolo26.md) model on the brain tumor dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 640, utilize the provided code snippets. For a detailed list of available arguments, consult the model's [Training](../../modes/train.md) page.
+To [train](../../modes/train.md) a [YOLO26n](https://platform.ultralytics.com/ultralytics/yolo26/yolo26n) model on the brain tumor dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 640, use the code snippets below.
 
 !!! example "Train Example"
 
@@ -117,9 +117,9 @@ To train a [YOLO26](../../models/yolo26.md) model on the brain tumor dataset for
 
 The brain tumor dataset contains MRI and CT brain scans with and without tumors. Below is an example image from the dataset with its annotations.
 
-![Brain tumor dataset sample image](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/brain-tumor-dataset-sample-image.avif)
+![Brain tumor dataset sample image](https://cdn.ul.run/i/711abf9c822ccd3db614c073b6c976c8.avif)
 
-- **Mosaiced Image**: This training batch shows mosaiced dataset images. Mosaicing combines multiple images into one during training, increasing batch diversity so the model generalizes better across tumor sizes, shapes, and locations for [medical image analysis](https://www.ultralytics.com/blog/using-yolo11-for-tumor-detection-in-medical-imaging).
+- **Mosaiced Image**: This training batch shows mosaiced dataset images. Mosaicing combines multiple images into one during training, increasing batch diversity so the model generalizes better across tumor sizes, shapes, and locations for [medical image analysis](https://www.ultralytics.com/glossary/medical-image-analysis).
 
 ## Citations and Acknowledgments
 
@@ -127,7 +127,7 @@ The dataset has been made available under the [AGPL-3.0 License](https://github.
 
 If you use this dataset in your research or development work, please cite it appropriately:
 
-!!! quote ""
+!!! quote "Citation"
 
     === "BibTeX"
 
@@ -137,7 +137,7 @@ If you use this dataset in your research or development work, please cite it app
             title = {Brain Tumor Detection Dataset},
             year = {2023},
             publisher = {Ultralytics},
-            url = {https://docs.ultralytics.com/datasets/detect/brain-tumor/}
+            url = {https://docs.ultralytics.com/datasets/detect/brain-tumor}
         }
         ```
 
@@ -173,7 +173,6 @@ You can train a YOLO26 model on the brain tumor dataset for 100 epochs with an i
         results = model.train(data="brain-tumor.yaml", epochs=100, imgsz=640)
         ```
 
-
     === "CLI"
 
         ```bash
@@ -185,7 +184,7 @@ For a detailed list of available arguments, refer to the [Training](../../modes/
 
 ### What are the benefits of using the brain tumor dataset for AI in healthcare?
 
-Using the brain tumor dataset in AI projects enables early diagnosis and treatment planning for brain tumors. It helps in automating brain tumor identification through computer vision, facilitating accurate and timely medical interventions, and supporting personalized treatment strategies. This application holds significant potential in improving patient outcomes and medical efficiencies. For more insights on AI applications in healthcare, see [Ultralytics' healthcare solutions](https://www.ultralytics.com/solutions/computer-vision-in-healthcare).
+Using the brain tumor dataset in AI projects enables early diagnosis and treatment planning for brain tumors. It helps in [automating brain tumor identification](https://www.ultralytics.com/blog/using-yolo11-for-tumor-detection-in-medical-imaging) through computer vision, facilitating accurate and timely medical interventions, and supporting personalized treatment strategies. It can help improve patient outcomes and clinical efficiency.
 
 ### How do I perform inference using a fine-tuned YOLO26 model on the brain tumor dataset?
 

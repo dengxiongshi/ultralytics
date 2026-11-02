@@ -36,7 +36,7 @@ class FastSTrack(STrack):
 
     Examples:
         >>> from ultralytics.trackers.utils.kalman_filter import KalmanFilterXYAH
-        >>> t = FastSTrack([100, 200, 50, 80, 0], score=0.9, cls=0, history_len=8)
+        >>> t = FastSTrack(np.array([100, 200, 50, 80, 0]), score=0.9, cls=0, history_len=8)
         >>> t.activate(KalmanFilterXYAH(), frame_id=1)
         >>> len(t.mean_history)
         1
@@ -49,7 +49,7 @@ class FastSTrack(STrack):
             xywh (np.ndarray): Bounding box in ``(x, y, w, h, idx)`` or ``(x, y, w, h, angle, idx)`` format.
             score (float): Detection confidence in `[0, 1]`.
             cls (Any): Class label for the detection.
-            history_len (int): Maximum number of past Kalman mean vectors kept for occlusion rollback.
+            history_len (int): Maximum number of past Kalman `(mean, covariance)` snapshots kept for occlusion rollback.
         """
         super().__init__(xywh, score, cls)
         self.mean_history: deque = deque(maxlen=history_len)
@@ -120,7 +120,8 @@ class FASTTracker(BYTETracker):
             onset.
         reset_pos_offset_occ (int): Number of frames to look back when restoring Kalman position at occlusion onset.
         enlarge_bbox_occ (float): One-shot multiplier applied to the bbox height when occlusion is first detected.
-        dampen_motion_occ (float): Multiplier in `[0, 1]` applied to Kalman velocity during occlusion.
+        dampen_motion_occ (float): Multiplier in `[0, 1]` applied once to Kalman velocity when occlusion is first
+            detected.
         active_occ_to_lost_thresh (int): Maximum consecutive occluded frames before a track is marked lost anyway.
         init_iou_suppress (float): IoU threshold above which a new detection is prevented from spawning a fresh track.
             Set to 1.0 to disable suppression.
@@ -142,9 +143,11 @@ class FASTTracker(BYTETracker):
         Drive FastTracker directly with your own detections:
         >>> from ultralytics.trackers import FASTTracker
         >>> from ultralytics.utils import YAML, IterableSimpleNamespace
-        >>> cfg = IterableSimpleNamespace(**YAML.load("ultralytics/cfg/trackers/fasttrack.yaml"))
+        >>> from ultralytics.utils.checks import check_yaml
+        >>> cfg = IterableSimpleNamespace(**YAML.load(check_yaml("fasttrack.yaml")))
         >>> tracker = FASTTracker(cfg)
-        >>> tracks = tracker.update(detections)
+        >>> result = model("https://ultralytics.com/images/bus.jpg")[0]
+        >>> tracks = tracker.update(result.boxes.cpu().numpy(), result.orig_img)
     """
 
     track_class = FastSTrack
@@ -238,9 +241,12 @@ class FASTTracker(BYTETracker):
             det = detections[inew]
             if det.score < self.args.new_track_thresh:
                 continue
-            if suppress_on and len(active_stack):
-                if bbox_ioa(det.xyxy[None, :], active_stack, iou=True).max() >= self.init_iou_suppress:
-                    continue
+            if (
+                suppress_on
+                and len(active_stack)
+                and bbox_ioa(det.xyxy[None, :], active_stack, iou=True).max() >= self.init_iou_suppress
+            ):
+                continue
             det.activate(self.kalman_filter, self.frame_id)
             activated.append(det)
             active_stack = np.concatenate([active_stack, det.xyxy[None, :]], axis=0)
@@ -337,10 +343,7 @@ class FASTTracker(BYTETracker):
             if track.was_recently_occluded and (self.frame_id - track.last_occluded_frame > self.occ_reappear_window):
                 track.was_recently_occluded = False
 
-            if track.state != TrackState.Lost:
-                # Give occluded tracks a grace period before marking lost.
-                if track.not_matched > 2 and (
-                    not track.is_occluded or track.occluded_len > self.active_occ_to_lost_thresh
-                ):
-                    track.mark_lost()
-                    lost_stracks.append(track)
+            # Give occluded tracks a grace period before marking lost.
+            if track.not_matched > 2 and (not track.is_occluded or track.occluded_len > self.active_occ_to_lost_thresh):
+                track.mark_lost()
+                lost_stracks.append(track)

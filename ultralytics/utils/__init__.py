@@ -11,7 +11,9 @@ import os
 import platform
 import re
 import socket
+import stat
 import sys
+import tempfile
 import threading
 import time
 import warnings
@@ -23,11 +25,18 @@ from urllib.parse import unquote
 
 import cv2
 import numpy as np
-import torch
+
+try:
+    import torch
+except ImportError:  # torch 1.10-1.12 x86_64 wheels request an executable stack that glibc>=2.41 refuses
+    from ultralytics.utils.files import import_execstack
+
+    torch = import_execstack("torch", "torch/lib/*.so*")
 
 from ultralytics import __version__
 from ultralytics.utils.git import GitRepo
-from ultralytics.utils.patches import imread, imshow, imwrite, torch_save  # for patches
+from ultralytics.utils.patches import imread as imread  # re-export for backwards compatibility
+from ultralytics.utils.patches import imread_unicode, imshow, imwrite, torch_save  # for patches
 from ultralytics.utils.tqdm import TQDM  # noqa
 
 
@@ -52,9 +61,10 @@ def env_bool(name: str, default: bool = False) -> bool:
     return default if v is None else v.strip().lower() in {"1", "true", "yes", "on", "y", "t"}
 
 
-# PyTorch Multi-GPU DDP Constants
-RANK = int(os.getenv("RANK", -1))
-LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))  # https://pytorch.org/docs/stable/elastic/run.html
+# PyTorch Multi-GPU DDP Constants, trusted only in real DDP workers, i.e. WORLD_SIZE > 1 (#16446)
+WORLD_SIZE = int(os.getenv("WORLD_SIZE", "1"))
+RANK = int(os.getenv("RANK", "-1")) if WORLD_SIZE > 1 else -1
+LOCAL_RANK = int(os.getenv("LOCAL_RANK", "-1")) if WORLD_SIZE > 1 else -1
 
 # Other Constants
 ARGV = sys.argv or ["", ""]  # sometimes sys.argv = []
@@ -62,6 +72,8 @@ FILE = Path(__file__).resolve()
 ROOT = FILE.parents[1]  # YOLO
 ASSETS = ROOT / "assets"  # default images
 ASSETS_URL = "https://github.com/ultralytics/assets/releases/download/v0.0.0"  # assets GitHub URL
+# Hosts like upload.wikimedia.org reject the python-requests default User-Agent
+REQUEST_HEADERS = {"User-Agent": f"ultralytics/{__version__} (https://ultralytics.com)"}
 # Configurable Platform URL for debugging (e.g. ULTRALYTICS_PLATFORM_URL=http://localhost:3000)
 PLATFORM_URL = os.getenv("ULTRALYTICS_PLATFORM_URL", "https://platform.ultralytics.com").rstrip("/")
 DEFAULT_CFG_PATH = ROOT / "cfg/default.yaml"
@@ -77,7 +89,7 @@ ARM64 = platform.machine() in {"arm64", "aarch64"}  # ARM64 booleans
 PYTHON_VERSION = platform.python_version()
 TORCH_VERSION = str(torch.__version__)  # Normalize torch.__version__ (PyTorch>1.9 returns TorchVersion objects)
 TORCHVISION_VERSION = importlib.metadata.version("torchvision")  # faster than importing torchvision
-IS_VSCODE = os.environ.get("TERM_PROGRAM", False) == "vscode"
+IS_VSCODE = os.environ.get("TERM_PROGRAM") == "vscode"
 RKNN_CHIPS = frozenset(
     {
         "rk3588",
@@ -93,16 +105,24 @@ RKNN_CHIPS = frozenset(
         "rv1126b",
     }
 )  # Rockchip processors available for export
-QNN_HTP_ARCHS = frozenset(
-    {
-        "68",  # Snapdragon 888
-        "69",  # Snapdragon 8 Gen 1
-        "73",  # Snapdragon 8 Gen 2 / X Elite
-        "75",  # Snapdragon 8 Gen 3
-        "79",  # Snapdragon 8 Elite
-        "81",  # Snapdragon 8 Elite Gen 5
-    }
-)  # Qualcomm Hexagon HTP architecture versions available for QNN export
+QNN_HTP_TARGETS = {
+    "68": ("htp_arch", "68"),  # Snapdragon 888
+    "69": ("htp_arch", "69"),  # Snapdragon 8 Gen 1
+    "73": ("htp_arch", "73"),  # Snapdragon 8 Gen 2 / X Elite
+    "75": ("htp_arch", "75"),  # Snapdragon 8 Gen 3
+    "79": ("soc_model", "69"),  # Snapdragon 8 Elite (SM8750)
+    "81": ("htp_arch", "81"),  # Snapdragon 8 Elite Gen 5
+    "iq-8275": ("soc_model", "82"),  # Dragonwing IQ-8275
+    "qcs8275": ("soc_model", "82"),
+}  # Qualcomm Hexagon HTP targets and their ONNX Runtime QNN provider option
+XILINX_TARGETS = (
+    "ve2-xc2ve3858",
+    "ve2-xc2ve3504",
+    "ve2-xc2ve3558",
+    "ve2-xc2ve3804",
+    "ve2-xc2ve3304",
+    "ve2-xc2ve3358",
+)  # AMD Versal AI Edge Series Gen 2 Vitis AI compiler devices, the first is the VEK385 evaluation kit default
 HELP_MSG = """
     Examples for running Ultralytics:
 
@@ -130,7 +150,7 @@ HELP_MSG = """
 
             yolo TASK MODE ARGS
 
-            Where   TASK (optional) is one of [detect, segment, semantic, classify, pose, obb]
+            Where   TASK (optional) is one of [detect, segment, semantic, depth, classify, pose, obb]
                     MODE (required) is one of [train, val, predict, export, track, benchmark]
                     ARGS (optional) are any number of custom "arg=value" pairs like "imgsz=320" that override defaults.
                         See all ARGS at https://docs.ultralytics.com/usage/cfg or with "yolo cfg"
@@ -162,7 +182,7 @@ HELP_MSG = """
 
 # Settings and Environment Variables
 torch.set_printoptions(linewidth=320, precision=4, profile="default")
-np.set_printoptions(linewidth=320, formatter=dict(float_kind="{:11.5g}".format))  # format short g, %precision=5
+np.set_printoptions(linewidth=320, formatter={"float_kind": "{:11.5g}".format})  # format short g, %precision=5
 cv2.setNumThreads(0)  # prevent OpenCV from multithreading (incompatible with PyTorch DataLoader)
 os.environ["NUMEXPR_MAX_THREADS"] = str(NUM_THREADS)  # NumExpr max threads
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # suppress verbose TF compiler warnings in Colab
@@ -171,6 +191,7 @@ os.environ["KINETO_LOG_LEVEL"] = "5"  # suppress verbose PyTorch profiler output
 
 # Centralized warning suppression
 warnings.filterwarnings("ignore", message="torch.distributed.reduce_op is deprecated")  # PyTorch deprecation
+warnings.filterwarnings("ignore", message="TRITON_DEFAULT_FP_FUSION is unset")  # torch 2.15 eager bmm, Triton 3.9
 warnings.filterwarnings("ignore", message="The figure layout has changed to tight")  # matplotlib>=3.7.2
 warnings.filterwarnings("ignore", category=FutureWarning, module="timm")  # mobileclip timm.layers deprecation
 warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)  # ONNX/TorchScript export tracer warnings
@@ -187,21 +208,21 @@ class DataExportMixin:
     """Mixin class for exporting validation metrics or prediction results in various formats.
 
     This class provides utilities to export performance metrics (e.g., mAP, precision, recall) or prediction results
-    from classification, object detection, segmentation, or pose estimation tasks into various formats: Polars
-    DataFrame, CSV, and JSON.
+    from detection, segmentation, depth, classification, or pose estimation tasks into various formats: Polars
+    DataFrame, CSV, and JSON. Subclasses must implement a `summary(normalize, decimals)` method.
 
     Methods:
         to_df: Convert summary to a Polars DataFrame.
         to_csv: Export results as a CSV string.
         to_json: Export results as a JSON string.
-        tojson: Deprecated alias for `to_json()`.
 
     Examples:
+        >>> from ultralytics import YOLO
         >>> model = YOLO("yolo26n.pt")
         >>> results = model("image.jpg")
-        >>> df = results.to_df()
+        >>> df = results[0].to_df()
         >>> print(df)
-        >>> csv_data = results.to_csv()
+        >>> csv_data = results[0].to_csv()
     """
 
     def to_df(self, normalize=False, decimals=5):
@@ -279,11 +300,7 @@ class SimpleClass:
         ...         self.x = 10
         ...         self.y = "hello"
         >>> obj = MyClass()
-        >>> print(obj)
-        __main__.MyClass object with attributes:
-
-        x: 10
-        y: 'hello'
+        >>> text = str(obj)  # "<module>.MyClass object with attributes:" followed by "x: 10" and "y: 'hello'"
 
     Notes:
         - This class is designed to be subclassed. It provides a convenient way to inspect object attributes.
@@ -378,23 +395,20 @@ def plt_settings(rcparams=None, backend="Agg"):
     """Decorator to temporarily set rc parameters and the backend for a plotting function.
 
     Args:
-        rcparams (dict, optional): Dictionary of rc parameters to set.
+        rcparams (dict, optional): Dictionary of rc parameters to set. Defaults to {"font.size": 11}.
         backend (str, optional): Name of the backend to use.
 
     Returns:
-        (Callable): Decorated function with temporarily set rc parameters and backend.
+        (Callable): Decorator that runs the wrapped function with temporarily set rc parameters and backend.
 
     Examples:
+        >>> import matplotlib.pyplot as plt
+        >>> from ultralytics.utils import plt_settings
         >>> @plt_settings({"font.size": 12})
         ... def plot_function():
         ...     plt.figure()
         ...     plt.plot([1, 2, 3])
-        ...     plt.show()
-
-        >>> with plt_settings({"font.size": 12}):
-        ...     plt.figure()
-        ...     plt.plot([1, 2, 3])
-        ...     plt.show()
+        ...     plt.savefig("plot.png")
     """
     if rcparams is None:
         rcparams = {"font.size": 11}
@@ -425,6 +439,12 @@ def plt_settings(rcparams=None, backend="Agg"):
             original_backend = plt.get_backend()
             switch = backend.lower() != original_backend.lower()
             if switch:
+                # Resolve configured backends first, as get_backend() may return an unavailable backend name
+                if plt._backend_mod is None:
+                    try:
+                        plt.switch_backend(original_backend)
+                    except ImportError:
+                        original_backend = None
                 plt.close("all")  # auto-close()ing of figures upon backend switching is deprecated since 3.8
                 plt.switch_backend(backend)
 
@@ -435,7 +455,8 @@ def plt_settings(rcparams=None, backend="Agg"):
             finally:
                 if switch:
                     plt.close("all")
-                    plt.switch_backend(original_backend)
+                    if original_backend:
+                        plt.switch_backend(original_backend)
             return result
 
         wrapper._fonts_registered = False
@@ -444,7 +465,7 @@ def plt_settings(rcparams=None, backend="Agg"):
     return decorator
 
 
-def set_logging(name="LOGGING_NAME", verbose=True):
+def set_logging(name=LOGGING_NAME, verbose=True):
     """Set up logging with UTF-8 encoding and configurable verbosity.
 
     This function configures logging for the Ultralytics library, setting the appropriate logging level and formatter
@@ -465,7 +486,7 @@ def set_logging(name="LOGGING_NAME", verbose=True):
 
     Notes:
         - On Windows, this function attempts to reconfigure stdout to use UTF-8 encoding if possible.
-        - If reconfiguration is not possible, it falls back to a custom formatter that handles non-UTF-8 environments.
+        - On Windows, emojis are removed from log messages.
         - The function sets up a StreamHandler with the appropriate formatter and level.
         - The logger's propagate flag is set to False to prevent duplicate logging in parent loggers.
     """
@@ -502,11 +523,14 @@ def set_logging(name="LOGGING_NAME", verbose=True):
 
     # Create and configure the StreamHandler with the appropriate formatter and level
     stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.set_name("ultralytics.utils.set_logging")
     stream_handler.setFormatter(formatter)
     stream_handler.setLevel(level)
 
     # Set up the logger
     logger = logging.getLogger(name)
+    for h in [h for h in logger.handlers if h.name == stream_handler.name]:
+        logger.removeHandler(h)
     logger.setLevel(level)
     logger.addHandler(stream_handler)
     logger.propagate = False
@@ -519,8 +543,8 @@ logging.getLogger("sentry_sdk").setLevel(logging.CRITICAL + 1)
 
 
 def emojis(string=""):
-    """Return platform-dependent emoji-safe version of string."""
-    return string.encode().decode("ascii", "ignore") if WINDOWS else string
+    """Return platform-dependent emoji-safe version of string, removing only the package's emojis on Windows."""
+    return string.translate(str.maketrans("", "", "🚀✅❌⚠💡⚡⏱❎❔😃\ufe0f")) if WINDOWS else string
 
 
 class ThreadingLocked:
@@ -536,7 +560,7 @@ class ThreadingLocked:
         >>> from ultralytics.utils import ThreadingLocked
         >>> @ThreadingLocked()
         ... def my_function():
-        ...    # Your code here
+        ...     pass  # your code here
     """
 
     def __init__(self):
@@ -557,53 +581,44 @@ class ThreadingLocked:
 
 
 class YAML:
-    """YAML utility class for efficient file operations with automatic C-implementation detection.
+    """Minimal YAML reader and writer for Ultralytics configs, datasets and export metadata.
 
-    This class provides optimized YAML loading and saving operations using PyYAML's fastest available implementation
-    (C-based when possible). It implements a singleton pattern with lazy initialization, allowing direct class method
-    usage without explicit instantiation. The class handles file path creation, validation, and character encoding
-    issues automatically.
-
-    The implementation prioritizes performance through:
-        - Automatic C-based loader/dumper selection when available
-        - Singleton pattern to reuse the same instance
-        - Lazy initialization to defer import costs until needed
-        - Fallback mechanisms for handling problematic YAML content
-
-    Attributes:
-        _instance: Internal singleton instance storage.
-        yaml: Reference to the PyYAML module.
-        SafeLoader: Best available YAML loader (CSafeLoader if available).
-        SafeDumper: Best available YAML dumper (CSafeDumper if available).
+    Parses the YAML these files use: block mappings and sequences, flow collections, plain, quoted and block scalars,
+    and comments. Plain scalars resolve with YAML 1.2 core rules plus Python's None/True/False spellings, so `yes`,
+    `no`, `on` and `off` stay strings and `1e-3` is a float. Anchors, aliases, tags and complex keys raise ValueError.
+    Saved files write nested dicts as blocks and other values inline, readable by any YAML parser.
 
     Examples:
+        >>> from ultralytics.utils import YAML
         >>> data = YAML.load("config.yaml")
         >>> data["new_value"] = 123
         >>> YAML.save("updated_config.yaml", data)
         >>> YAML.print(data)
     """
 
-    _instance = None
+    _CONST = {
+        **dict.fromkeys(("", "~", "null", "Null", "NULL", "None")),
+        **dict.fromkeys(("true", "True", "TRUE"), True),
+        **dict.fromkeys(("false", "False", "FALSE"), False),
+        **dict.fromkeys((".inf", ".Inf", ".INF", "+.inf", "+.Inf", "+.INF"), float("inf")),
+        **dict.fromkeys(("-.inf", "-.Inf", "-.INF"), float("-inf")),
+        **dict.fromkeys((".nan", ".NaN", ".NAN"), float("nan")),
+    }
+    _ESC = dict(zip('0abt\tnvfre "/\\N_LP', '\0\a\b\t\t\n\v\f\r\x1b "/\\\x85\xa0\u2028\u2029'))
+    _YAML11 = {"y", "n", "yes", "no", "on", "off"}  # quoted on save so YAML 1.1 readers keep them strings
+    _COMMENT = re.compile(r"[ \t]#")
+    _QUOTED = re.compile(r""""(?:[^"\\]|\\[\s\S])*"|'(?:[^']|'')*'(?!')""")
+    _FLOW = re.compile(  # flow token: quoted scalar | indicator | comment | plain scalar
+        rf"\s*(?:({_QUOTED.pattern})|([\[\]{{}},:])|(#.*)|([^\s,\[\]{{}}#](?:[^,\[\]{{}}:#]|:(?=[^\s,\[\]{{}}])|(?<=\S)#)*))"
+    )
+    _FOLD = r"[ \t]*\n((?:[ \t]*\n)*)[ \t]*"  # quoted line break: one folds to a space, n + 1 to n newlines
+    _DQ = re.compile(rf"\\(x[0-9A-Fa-f]{{2}}|u[0-9A-Fa-f]{{4}}|U[0-9A-Fa-f]{{8}}|\n[ \t]*|[\s\S])|{_FOLD}")
+    _PLAIN = re.compile(r"(?:\.\.?/|[^\s\d+.\-?:,\[\]{}#&*!|>'\"%@`<=])(?:[^\n\r\t:#]|:(?! |$)|(?<! )#)*(?<! )")
 
-    @classmethod
-    def _get_instance(cls):
-        """Initialize singleton instance on first use."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
-
-    def __init__(self):
-        """Initialize with optimal YAML implementation (C-based when available)."""
-        import yaml
-
-        self.yaml = yaml
-        # Use C-based implementation if available for better performance
-        try:
-            self.SafeLoader = yaml.CSafeLoader
-            self.SafeDumper = yaml.CSafeDumper
-        except (AttributeError, ImportError):
-            self.SafeLoader = yaml.SafeLoader
-            self.SafeDumper = yaml.SafeDumper
+    def __init__(self, text: str):
+        """Split a YAML document into lines for `parse()`."""
+        self.lines = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        self.i = 0
 
     @classmethod
     def save(cls, file="data.yaml", data=None, header=""):
@@ -611,10 +626,10 @@ class YAML:
 
         Args:
             file (str | Path): Path to save YAML file.
-            data (dict | None): Dict or compatible object to save.
+            data (dict | None): Dict to save. Top-level values of non-YAML-serializable types are converted to strings
+                in place.
             header (str): Optional string to add at file beginning.
         """
-        instance = cls._get_instance()
         if data is None:
             data = {}
 
@@ -630,40 +645,32 @@ class YAML:
 
         # Write YAML file
         with open(file, "w", errors="ignore", encoding="utf-8") as f:
-            if header:
-                f.write(header)
-            instance.yaml.dump(data, f, sort_keys=False, allow_unicode=True, Dumper=instance.SafeDumper)
+            f.write(header + cls._dump(data))
 
     @classmethod
     def load(cls, file="data.yaml", append_filename=False):
-        """Load YAML file to Python object with robust error handling.
+        """Load YAML file to Python object.
 
         Args:
             file (str | Path): Path to YAML file.
             append_filename (bool): Whether to add filename to returned dict.
 
         Returns:
-            (dict): Loaded YAML content.
-        """
-        instance = cls._get_instance()
-        assert str(file).endswith((".yaml", ".yml")), f"Not a YAML file: {file}"
+            (dict): Loaded YAML content, or an empty dict for an empty file.
 
-        # Read file content
+        Raises:
+            AssertionError: If the file does not have a .yaml or .yml suffix.
+            ValueError: If the file contains a YAML syntax error or is not a YAML mapping.
+        """
+        assert str(file).lower().endswith((".yaml", ".yml")), f"Not a YAML file: {file}"
         with open(file, errors="ignore", encoding="utf-8") as f:
             s = f.read()
-
-        # Try loading YAML with fallback for problematic characters
         try:
-            data = instance.yaml.load(s, Loader=instance.SafeLoader)
+            data = cls(s).parse()
         except Exception as e:
-            # Remove problematic characters and retry
-            s = re.sub(r"[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010ffff]+", "", s)
-            try:
-                data = instance.yaml.load(s, Loader=instance.SafeLoader)
-            except Exception:
-                raise ValueError(
-                    f"YAML syntax error in '{file}': {e}\nVerify YAML with https://ray.run/tools/yaml-formatter"
-                ) from None
+            raise ValueError(
+                f"YAML syntax error in '{file}': {e}\nVerify YAML with https://ray.run/tools/yaml-formatter"
+            ) from None
 
         if data is None:  # empty file, comments only, or explicit 'null'
             data = {}
@@ -671,10 +678,6 @@ class YAML:
             raise ValueError(
                 f"'{file}' is not a valid YAML mapping. Verify YAML with https://ray.run/tools/yaml-formatter"
             )
-
-        # Check for accidental user-error None strings (should be 'null' in YAML)
-        if "None" in data.values():
-            data = {k: None if v == "None" else v for k, v in data.items()}
 
         if append_filename:
             data["yaml_file"] = str(file)
@@ -687,15 +690,284 @@ class YAML:
         Args:
             yaml_file (str | Path | dict): Path to YAML file or dict to print.
         """
-        instance = cls._get_instance()
-
-        # Load file if path provided
         yaml_dict = cls.load(yaml_file) if isinstance(yaml_file, (str, Path)) else yaml_file
+        LOGGER.info(f"Printing '{colorstr('bold', 'black', yaml_file)}'\n\n{cls._dump(yaml_dict)}")
 
-        # Use -1 for unlimited width in C implementation
-        dump = instance.yaml.dump(yaml_dict, sort_keys=False, allow_unicode=True, width=-1, Dumper=instance.SafeDumper)
+    @classmethod
+    def _dump(cls, v, indent: str = "") -> str:
+        """Serialize a dict or list in PyYAML's block layout, with scalars and empty collections inline."""
+        out = []
+        for k, x in v.items() if isinstance(v, dict) else enumerate(v):
+            head = f"{indent}{cls._repr(k)}:" if isinstance(v, dict) else f"{indent}-"
+            if isinstance(x, (dict, list, tuple)) and x:
+                if isinstance(v, dict):  # nested dict indented, nested list at the key's indent like PyYAML
+                    out.append(f"{head}\n{cls._dump(x, indent + '  ' if isinstance(x, dict) else indent)}")
+                else:  # '- - x' and '- k: v' put the item's first line after its dash
+                    out.append(f"{head} {cls._dump(x, indent + '  ')[len(indent) + 2 :]}")
+            else:
+                out.append(f"{head} {cls._repr(x)}\n")
+        return "".join(out)
 
-        LOGGER.info(f"Printing '{colorstr('bold', 'black', yaml_file)}'\n\n{dump}")
+    @classmethod
+    def _repr(cls, v) -> str:
+        """Represent a scalar or empty collection inline, strings plain when unambiguous and double-quoted otherwise."""
+        if v is None or v is True or v is False:
+            return {None: "null", True: "true", False: "false"}[v]
+        if isinstance(v, int):
+            return str(v)
+        if isinstance(v, float):
+            s = {"nan": ".nan", "inf": ".inf", "-inf": "-.inf"}.get(r := repr(float(v)), r)  # np.float64(x) -> x
+            return s.replace("e", ".0e") if "e" in s and "." not in s else s  # '1.0e-05' so YAML 1.1 reads a float
+        if isinstance(v, (dict, list, tuple)):
+            return "{}" if isinstance(v, dict) else "[]"
+        v = str(v)
+        if v.isprintable() and cls._PLAIN.fullmatch(v) and cls._scalar(v) is v and v.lower() not in cls._YAML11:
+            return v
+        return re.sub(r"[\x7f-\x9f]", lambda m: f"\\x{ord(m[0]):02x}", json.dumps(v, ensure_ascii=False))
+
+    @classmethod
+    def _scalar(cls, s: str):
+        """Resolve a plain scalar to None, bool, int, float or str."""
+        if s in cls._CONST:
+            return cls._CONST[s]
+        if s[0] in "0123456789+-." and s[-1] in "0123456789.":
+            for f in (int, float):
+                try:
+                    return f(s)
+                except ValueError:
+                    pass
+        return s
+
+    @classmethod
+    def _unquote(cls, s: str) -> str:
+        """Decode a quoted scalar, including its quotes, by folding line breaks and resolving escapes."""
+        q, s = s[0], s[1:-1]
+        if q == "'":
+            return (re.sub(cls._FOLD, cls._fold, s) if "\n" in s else s).replace("''", "'")
+        return cls._DQ.sub(cls._escape, s) if "\\" in s or "\n" in s else s
+
+    @classmethod
+    def _escape(cls, m) -> str:
+        """Replace one double-quoted escape sequence or folded line break."""
+        e = m[1]
+        if e is None:
+            return cls._fold(m, 2)
+        if e[0] == "\n" or len(e) > 1:  # escaped line break, or \x, \u, \U code point
+            return "" if e[0] == "\n" else chr(int(e[1:], 16))
+        if e not in cls._ESC:
+            raise ValueError(f"unknown escape '\\{e}' in a double-quoted string, use single quotes for Windows paths")
+        return cls._ESC[e]
+
+    @staticmethod
+    def _fold(m, group: int = 1) -> str:
+        """Fold a matched line break: one break becomes a space, n + 1 breaks become n newlines."""
+        return "\n" * m[group].count("\n") or " "
+
+    def parse(self):
+        r"""Parse the YAML document passed to the constructor.
+
+        Returns:
+            (Any): The top-level node, usually a dict, or None for an empty document.
+
+        Raises:
+            ValueError: If the document has a syntax error or uses unsupported YAML features.
+
+        Examples:
+            >>> YAML("names:\n  0: person\nnc: 1").parse()
+            {'names': {0: 'person'}, 'nc': 1}
+        """
+        n, c = self._peek()
+        if c == "---" or c.startswith("--- "):  # document start, possibly with content on the same line
+            self.lines[self.i] = c[4:]
+            n, c = self._peek()
+        v = None if n < 0 else self._node(n, c, -1)
+        if (m := self._peek())[0] >= 0:  # a single document only, so '...' and later content raise
+            self._error(f"unexpected {m[1]!r}")
+        return v
+
+    def _error(self, msg):
+        """Raise a ValueError for the current line."""
+        raise ValueError(f"line {self.i + 1}: {msg}")
+
+    def _peek(self):
+        """Advance past blank and comment lines, returning (indent, content) of the next line or (-1, '') at the end."""
+        while self.i < len(self.lines):
+            line = self.lines[self.i]
+            c = line.strip(" \t")
+            if c and c[0] != "#":
+                n = len(line) - len(line.lstrip(" "))
+                if line[n] == "\t":
+                    self._error("tab indentation")
+                return n, c
+            self.i += 1
+        return -1, ""
+
+    @classmethod
+    def _key(cls, c):
+        """Split a 'key: value' line into (key, rest), or return None if it is not a mapping entry."""
+        if c[0] in "\"'":
+            m = cls._QUOTED.match(c)
+            tail = c[m.end() :] if m else ""
+            return (cls._unquote(m[0]), tail[1:].strip(" \t")) if tail[:1] == ":" and tail[1:2] in {"", " "} else None
+        j = c.find(": ")
+        j = len(c) - 1 if j < 0 and c[-1] == ":" else j
+        k = c[:j].rstrip(" \t")
+        if j <= 0 or not k or c[0] in "[{&*!" or c[:2] == "- " or cls._COMMENT.search(k):
+            return None
+        return cls._scalar(k), c[j + 1 :].strip(" \t")
+
+    def _node(self, n, c, p):
+        """Parse the block node whose first line has indent n and content c, inside a parent node at indent p."""
+        if c == "-" or c.startswith("- "):
+            return self._seq(n)
+        if self._key(c):
+            return self._map(n)
+        self.i += 1
+        return self._value(c, p)
+
+    def _map(self, n):
+        """Parse a block mapping at indent n."""
+        d = {}
+        while True:
+            m, c = self._peek()
+            if m < n:
+                return d
+            kv = self._key(c) if m == n else None
+            if kv is None:
+                self._error(f"expected 'key: value' at indent {n}, got {c!r}")
+            self.i += 1
+            d[kv[0]] = self._value(kv[1], n)
+
+    def _seq(self, n):
+        """Parse a block sequence whose '-' indicators are at indent n."""
+        out = []
+        while True:
+            m, c = self._peek()
+            if m != n or not (c == "-" or c.startswith("- ")):
+                if m > n:
+                    self._error(f"bad indentation of {c!r}")
+                return out
+            rest = c[1:].lstrip(" ")
+            if not rest or rest[0] == "#":  # empty item: a block indented under the dash, otherwise null
+                self.i += 1
+                m, c = self._peek()
+                out.append(self._node(m, c, n) if m > n else None)
+            elif rest == "-" or rest.startswith("- ") or self._key(rest):
+                k = n + len(c) - len(rest)
+                self.lines[self.i] = " " * k + rest  # re-read '- key: v' and '- - x' as a node at the item's column
+                out.append(self._node(k, rest, n))
+            else:
+                self.i += 1
+                out.append(self._value(rest, n))
+
+    def _value(self, rest, n):
+        """Parse a value starting with text rest, on a line that belongs to a parent node at indent n."""
+        if not rest or rest[0] == "#":  # nested block, indentless sequence or null
+            m, c = self._peek()
+            return self._node(m, c, n) if m > n or (m == n and (c == "-" or c.startswith("- "))) else None
+        if rest[0] in "[{\"'":  # flow collection or quoted scalar, possibly spanning lines
+            flow, i, k = rest[0] in "[{", self.i, 0
+            while True:  # add following lines in doubling chunks so long multi-line values stay linear
+                text = "\n".join([rest, *self.lines[i : i + k]])
+                end = self._flow_end(text) if flow else (m.end() if (m := self._QUOTED.match(text)) else -1)
+                if end >= 0:
+                    break
+                if i + k >= len(self.lines):
+                    self._error("unterminated flow collection or quoted scalar")
+                k = 2 * k or 1
+            self.i = i + text.count("\n", 0, end)
+            tail = text[end:].split("\n", 1)[0].strip(" \t")
+            if tail[:1] not in {"", "#"}:
+                self._error(f"unexpected {tail!r}")
+            return self._flow(text[:end]) if flow else self._unquote(text[:end])
+        if rest[0] in "|>":
+            return self._block_scalar(rest, n)
+        if rest[0] in "&*!":
+            self._error("anchors, aliases and tags are not supported")
+        s, j = self._COMMENT.split(rest, maxsplit=1)[0].rstrip(" \t") if "#" in rest else rest, self.i
+        while (m := self._peek())[0] > n:  # multi-line plain scalar: a line break folds to a space, n blank lines to n
+            s += ("\n" * (self.i - j) or " ") + (
+                self._COMMENT.split(m[1], maxsplit=1)[0].rstrip(" \t") if "#" in m[1] else m[1]
+            )
+            self.i = j = self.i + 1
+        if ": " in s or s.endswith(":"):
+            self._error(f"mapping inside plain scalar {s!r}")
+        return self._scalar(s)
+
+    def _block_scalar(self, header, n):
+        """Read a literal '|' or folded '>' block scalar with optional chomping and indentation indicators."""
+        h = header.split("#", 1)[0].strip(" \t")
+        if not re.fullmatch(r"[|>]([1-9]?[+-]?|[+-][1-9])", h):
+            self._error(f"invalid block scalar header {header!r}, quote values that start with '|' or '>'")
+        lines, ind = [], n + int(d[0]) if (d := re.search(r"\d", h)) else None  # an indicator fixes the content indent
+        while self.i < len(self.lines):
+            raw = self.lines[self.i]
+            if raw.strip(" \t"):
+                m = len(raw) - len(raw.lstrip(" "))
+                if m <= n or (ind is not None and m < ind):  # a less-indented line ends the scalar
+                    break
+                ind = m if ind is None else ind
+            lines.append(raw)
+            self.i += 1
+        ind = max(map(len, lines), default=0) if ind is None else ind  # no content line: every line is empty
+        lines, trailing = [x[ind:] for x in lines], -(self.i == len(self.lines))  # '' after the final break is no line
+        while lines and not lines[-1]:  # only empty lines chomp, spaces past the indent are content
+            lines.pop()
+            trailing += 1
+        text = "\n".join(lines)
+        if h[0] == ">":  # fold breaks between unindented text lines: one to a space, n + 1 to n newlines
+            text = re.sub(r"(?m)^([^ \n].*)\n(\n*)(?=[^ \n])", lambda m: m[1] + (m[2] or " "), text)
+        if "-" in h or trailing < 0:  # strip, or no final line break at end of file
+            return text
+        return (text + "\n" if text else "") + "\n" * (trailing if "+" in h else 0)
+
+    @classmethod
+    def _flow_end(cls, text):
+        """Return the index just past the flow collection that opens text, or -1 if it continues on the next line."""
+        depth = 0
+        for m in cls._FLOW.finditer(text):
+            depth += (m[2] in {"[", "{"}) - (m[2] in {"]", "}"})
+            if not depth:
+                return m.end()
+        return -1
+
+    def _flow(self, text):
+        """Parse a complete flow collection."""
+        toks = [(m[1], m[2], m[4]) for m in self._FLOW.finditer(text) if not m[3]]
+        pos = 0
+
+        def node():
+            """Parse the flow node at the current token."""
+            nonlocal pos
+            q, ind, plain = toks[pos]
+            pos += 1
+            if plain and plain[0] in "&*!":
+                self._error("anchors, aliases and tags are not supported")
+            if q or plain:
+                return self._unquote(q) if q else self._scalar(re.sub(self._FOLD, self._fold, plain.rstrip(" \t\n")))
+            if ind not in {"[", "{"}:
+                self._error(f"unexpected {ind!r} in {text!r}")
+            close, out = ("]", []) if ind == "[" else ("}", {})
+            while toks[pos][1] != close:
+                k = node()
+                if ind == "[":
+                    out.append(k)
+                elif toks[pos][1] == ":":
+                    pos += 1
+                    out[k] = None if toks[pos][1] in {",", "}"} else node()
+                else:
+                    out[k] = None
+                if toks[pos][1] == ",":
+                    pos += 1
+                elif toks[pos][1] != close:
+                    self._error(f"expected ',' or '{close}' in {text!r}")
+            pos += 1
+            return out
+
+        try:
+            return node()
+        except IndexError:
+            self._error(f"unterminated flow collection {text!r}")
 
 
 # Default configuration
@@ -726,7 +998,7 @@ def is_ubuntu() -> bool:
         return False
 
 
-def is_debian(codenames: list[str] | None | str = None) -> list[bool] | bool:
+def is_debian(codenames: list[str] | str | None = None) -> list[bool] | bool:
     """Check if the OS is Debian.
 
     Args:
@@ -818,7 +1090,7 @@ def is_jetson(jetpack=None) -> bool:
     """Determine if the Python environment is running on an NVIDIA Jetson device.
 
     Args:
-        jetpack (int | None): If specified, check for specific JetPack version (4, 5, 6).
+        jetpack (int | None): If specified, check for specific JetPack version (4, 5, 6, 7).
 
     Returns:
         (bool): True if running on an NVIDIA Jetson device, False otherwise.
@@ -826,9 +1098,9 @@ def is_jetson(jetpack=None) -> bool:
     jetson = "tegra" in DEVICE_MODEL
     if jetson and jetpack:
         try:
-            content = open("/etc/nv_tegra_release").read()
-            version_map = {4: "R32", 5: "R35", 6: "R36", 7: "R38"}  # JetPack to L4T major version mapping
-            return jetpack in version_map and version_map[jetpack] in content
+            content = Path("/etc/nv_tegra_release").read_text()
+            version_map = {4: ("R32",), 5: ("R35",), 6: ("R36",), 7: ("R38", "R39")}  # JetPack to L4T major versions
+            return any(r in content for r in version_map.get(jetpack, ()))
         except Exception:
             return False
     return jetson
@@ -866,13 +1138,13 @@ def is_online() -> bool:
 
 
 def is_pip_package(filepath: str = __name__) -> bool:
-    """Determine if the file at the given filepath is part of a pip package.
+    """Determine if the given module is importable from an installed package.
 
     Args:
-        filepath (str): The filepath to check.
+        filepath (str): The dotted module name to check, e.g. 'ultralytics.utils'.
 
     Returns:
-        (bool): True if the file is part of a pip package, False otherwise.
+        (bool): True if the module spec is found and has an origin, False otherwise.
     """
     import importlib.util
 
@@ -930,7 +1202,7 @@ def get_ubuntu_version():
     """Retrieve the Ubuntu version if the OS is Ubuntu.
 
     Returns:
-        (str): Ubuntu version or None if not an Ubuntu OS.
+        (str | None): Ubuntu version, e.g. '22.04', or None if not an Ubuntu OS.
     """
     if is_ubuntu():
         try:
@@ -948,6 +1220,9 @@ def get_user_config_dir(sub_dir="Ultralytics"):
 
     Returns:
         (Path): The path to the user config directory.
+
+    Raises:
+        ValueError: If the operating system is not supported and YOLO_CONFIG_DIR is not set.
     """
     if env_dir := os.getenv("YOLO_CONFIG_DIR"):
         p = Path(env_dir).expanduser() / sub_dir
@@ -960,27 +1235,22 @@ def get_user_config_dir(sub_dir="Ultralytics"):
     else:
         raise ValueError(f"Unsupported operating system: {platform.system()}")
 
-    if p.exists():  # already created → trust it
-        return p
-    if is_dir_writeable(p.parent):  # create if possible
+    with contextlib.suppress(OSError):  # create if possible
         p.mkdir(parents=True, exist_ok=True)
         return p
 
-    # Fallbacks for Docker, GCP/AWS functions where only /tmp is writable
-    for alt in [Path("/tmp") / sub_dir, Path.cwd() / sub_dir]:
-        if alt.exists():
-            return alt
-        if is_dir_writeable(alt.parent):
-            alt.mkdir(parents=True, exist_ok=True)
-            LOGGER.warning(
-                f"user config directory '{p}' is not writable, using '{alt}'. Set YOLO_CONFIG_DIR to override."
-            )
-            return alt
-
-    # Last fallback → CWD
-    p = Path.cwd() / sub_dir
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+    # Fallback for Docker, GCP/AWS functions where only /tmp is writable, private to the current user
+    alt = Path(tempfile.gettempdir()) / (sub_dir if WINDOWS else f"{sub_dir}-{os.getuid()}")
+    try:
+        alt.mkdir(mode=0o777 if WINDOWS else 0o700)  # a Windows 0o700 DACL locks out non-elevated runs
+    except OSError:
+        with contextlib.suppress(OSError):  # own private dir only, never a symlink; Windows %TEMP% is per-user
+            info = alt.lstat()
+            if stat.S_ISDIR(info.st_mode) and (WINDOWS or (info.st_uid, info.st_mode & 0o777) == (os.getuid(), 0o700)):
+                return alt
+        alt = Path(tempfile.mkdtemp(prefix=f"{sub_dir}-"))  # otherwise a new private dir for this process
+    LOGGER.warning(f"user config directory '{p}' is not writable, using '{alt}'. Set YOLO_CONFIG_DIR to override.")
+    return alt
 
 
 # Define constants (required below)
@@ -1018,7 +1288,7 @@ def colorstr(*input):
 
     Examples:
         >>> colorstr("blue", "bold", "hello world")
-        "\033[34m\033[1mhello world\033[0m"
+        '\x1b[34m\x1b[1mhello world\x1b[0m'
 
     Notes:
         Supported Colors and Styles:
@@ -1066,7 +1336,7 @@ def remove_colorstr(input_string):
 
     Examples:
         >>> remove_colorstr(colorstr("blue", "bold", "hello world"))
-        "hello world"
+        'hello world'
     """
     ansi_escape = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
     return ansi_escape.sub("", input_string)
@@ -1102,7 +1372,6 @@ class TryExcept(contextlib.ContextDecorator):
 
     def __enter__(self):
         """Execute when entering TryExcept context, initialize instance."""
-        pass
 
     def __exit__(self, exc_type, value, traceback):
         """Define behavior when exiting a 'with' block, print error message if necessary."""
@@ -1119,8 +1388,9 @@ class Retry(contextlib.ContextDecorator):
     other unreliable processes.
 
     Attributes:
-        times (int): Maximum number of retry attempts.
-        delay (int): Initial delay between retries in seconds.
+        times (int): Maximum number of attempts, including the first call.
+        delay (int): Base delay in seconds; the wait after the n-th failed attempt is `delay * 2**n`.
+        verbose (bool): Whether to log a warning for each failed attempt.
 
     Examples:
         Example usage as a decorator:
@@ -1130,10 +1400,11 @@ class Retry(contextlib.ContextDecorator):
         ...     return True
     """
 
-    def __init__(self, times=3, delay=2):
+    def __init__(self, times=3, delay=2, verbose=True):
         """Initialize Retry class with specified number of retries and delay."""
         self.times = times
         self.delay = delay
+        self.verbose = verbose  # False when the caller's own logging would feed back into its retries
         self._attempts = 0
 
     def __call__(self, func):
@@ -1147,9 +1418,10 @@ class Retry(contextlib.ContextDecorator):
                     return func(*args, **kwargs)
                 except Exception as e:
                     self._attempts += 1
-                    LOGGER.warning(f"Retry {self._attempts}/{self.times} failed: {e}")
+                    if self.verbose:
+                        LOGGER.warning(f"Retry {self._attempts}/{self.times} failed: {e}")
                     if self._attempts >= self.times:
-                        raise e
+                        raise
                     time.sleep(self.delay * (2**self._attempts))  # exponential backoff delay
 
         return wrapped_func
@@ -1166,7 +1438,8 @@ def threaded(func):
         func (callable): The function to be potentially executed in a separate thread.
 
     Returns:
-        (callable): A wrapper function that either returns a daemon thread or the direct function result.
+        (callable): A wrapper function that either returns a thread or the direct function result. The thread is
+            non-daemon so interpreter shutdown joins it before module teardown, avoiding teardown races.
 
     Examples:
         >>> @threaded
@@ -1180,7 +1453,9 @@ def threaded(func):
     def wrapper(*args, **kwargs):
         """Multi-thread a given function based on 'threaded' kwarg and return the thread or function result."""
         if kwargs.pop("threaded", True):  # run in thread
-            thread = threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True)
+            # Non-daemon so interpreter shutdown joins the thread before module teardown; a daemon thread still
+            # running at exit can be killed mid-C-call, aborting the process (e.g. 'FATAL: exception not rethrown').
+            thread = threading.Thread(target=func, args=args, kwargs=kwargs, daemon=False)
             thread.start()
             return thread
         else:
@@ -1198,7 +1473,7 @@ def set_sentry():
     Conditions required to send errors (ALL conditions must be met or no errors will be reported):
         - sentry_sdk package is installed
         - sync=True in YOLO settings
-        - pytest is not running
+        - pytest and GitHub Actions are not running
         - running in a pip package installation
         - running in a non-git directory
         - running with rank -1 or 0
@@ -1236,6 +1511,7 @@ def set_sentry():
             if exc_type in {KeyboardInterrupt, FileNotFoundError} or "out of memory" in str(exc_value):
                 return None  # do not send event
 
+        event.get("extra", {}).pop("sys.argv", None)
         event["tags"] = {
             "sys_argv": ARGV[0],
             "sys_argv_name": Path(ARGV[0]).name,
@@ -1248,11 +1524,12 @@ def set_sentry():
         dsn="https://888e5a0778212e1d0314c37d4b9aae5d@o4504521589325824.ingest.us.sentry.io/4504521592406016",
         debug=False,
         auto_enabling_integrations=False,
+        include_local_variables=False,
         traces_sample_rate=1.0,
         release=__version__,
         environment="runpod" if is_runpod() else "production",
         before_send=before_send,
-        ignore_errors=[KeyboardInterrupt, FileNotFoundError],
+        ignore_errors=[KeyboardInterrupt, FileNotFoundError, "OutOfMemoryError"],  # torch OOM by name, no torch import
     )
     sentry_sdk.set_user({"id": SETTINGS["uuid"]})  # SHA-256 anonymized UUID hash
 
@@ -1376,7 +1653,7 @@ class SettingsManager(JSONDict):
         /new/runs/dir
     """
 
-    def __init__(self, file=SETTINGS_FILE, version="0.0.6"):
+    def __init__(self, file=SETTINGS_FILE, version="0.0.8"):
         """Initialize the SettingsManager with default settings and load user settings."""
         import hashlib
         import uuid
@@ -1393,16 +1670,14 @@ class SettingsManager(JSONDict):
             "datasets_dir": str(datasets_root / "datasets"),  # Datasets directory
             "weights_dir": str(root / "weights"),  # Model weights directory
             "runs_dir": str(root / "runs"),  # Experiment runs directory
-            "uuid": hashlib.sha256(str(uuid.getnode()).encode()).hexdigest(),  # SHA-256 anonymized UUID hash
+            "uuid": hashlib.sha256(f"{uuid.getnode()}{platform.node()}".encode()).hexdigest(),  # MAC + host (Colab)
             "sync": True,  # Enable synchronization
             "api_key": "",  # Ultralytics API Key
             "openai_api_key": "",  # OpenAI API Key
             "clearml": True,  # ClearML integration
             "comet": True,  # Comet integration
             "dvc": True,  # DVC integration
-            "hub": True,  # Ultralytics HUB integration
             "mlflow": True,  # MLflow integration
-            "neptune": True,  # Neptune integration
             "raytune": True,  # Ray Tune integration
             "tensorboard": False,  # TensorBoard logging
             "wandb": False,  # Weights & Biases logging
@@ -1413,7 +1688,7 @@ class SettingsManager(JSONDict):
         self.help_msg = (
             f"\nView Ultralytics Settings with 'yolo settings' or at '{self.file}'"
             "\nUpdate Settings with 'yolo settings key=value', i.e. 'yolo settings runs_dir=path/to/dir'. "
-            "For help see https://docs.ultralytics.com/quickstart/#ultralytics-settings."
+            "For help see https://docs.ultralytics.com/usage/settings"
         )
 
         with torch_distributed_zero_first(LOCAL_RANK):
@@ -1426,17 +1701,27 @@ class SettingsManager(JSONDict):
             self._validate_settings()
 
     def _validate_settings(self):
-        """Validate the current settings and reset if necessary."""
+        """Validate settings and migrate valid values to the current schema."""
         correct_keys = frozenset(self.keys()) == frozenset(self.defaults.keys())
         correct_types = all(isinstance(self.get(k), type(v)) for k, v in self.defaults.items())
         correct_version = self.get("settings_version", "") == self.version
 
         if not (correct_keys and correct_types and correct_version):
             LOGGER.warning(
-                "Ultralytics settings reset to default values. This may be due to a possible problem "
-                f"with your settings or a recent ultralytics package update. {self.help_msg}"
+                "Ultralytics settings updated to the latest schema. Existing values were preserved where possible. "
+                f"{self.help_msg}"
             )
-            self.reset()
+            valid = {k: v for k, v in self.items() if k in self.defaults and isinstance(v, type(self.defaults[k]))}
+            if not re.fullmatch(r"ul_[0-9a-f]{40}", valid.get("api_key", "")):
+                if valid.get("api_key"):
+                    LOGGER.warning(
+                        f"Legacy API key removed. Get a Platform API key from {PLATFORM_URL}/settings?tab=api-keys "
+                        "and run 'yolo login API_KEY'."
+                    )
+                valid["api_key"] = ""  # discard legacy keys, which cannot authenticate with Platform
+            valid["settings_version"] = self.version
+            self.clear()
+            self.update({**self.defaults, **valid})
 
         if self.get("datasets_dir") == self.get("runs_dir"):
             LOGGER.warning(
@@ -1450,10 +1735,13 @@ class SettingsManager(JSONDict):
         self.update({key: value})
 
     def update(self, *args, **kwargs):
-        """Update settings, validating keys and types."""
-        for arg in args:
-            if isinstance(arg, dict):
-                kwargs.update(arg)
+        """Update settings, validating keys and types.
+
+        Raises:
+            KeyError: If a key is not a valid Ultralytics setting.
+            TypeError: If a value does not match the type of the setting's default.
+        """
+        kwargs = dict(*args, **kwargs)  # every form dict.update() accepts
         for k, v in kwargs.items():
             if k not in self.defaults:
                 raise KeyError(f"No Ultralytics setting '{k}'. {self.help_msg}")
@@ -1462,7 +1750,7 @@ class SettingsManager(JSONDict):
                 raise TypeError(
                     f"Ultralytics setting '{k}' must be '{t.__name__}' type, not '{type(v).__name__}'. {self.help_msg}"
                 )
-        super().update(*args, **kwargs)
+        super().update(kwargs)
 
     def reset(self):
         """Reset the settings to default and save them."""
@@ -1479,18 +1767,18 @@ def deprecation_warn(arg, new_arg=None):
 
 
 def clean_url(url):
-    """Strip auth from URL, i.e. `https://example.com/path/file.txt?auth` -> `https://example.com/path/file.txt`."""
+    """Strip auth from URL, e.g. `https://example.com/path/file.txt?auth` -> `https://example.com/path/file.txt`."""
     url = Path(url).as_posix().replace(":/", "://")  # Pathlib turns :// -> :/, as_posix() for Windows
     return unquote(url).split("?", 1)[0]  # '%2F' to '/', split authentication query strings
 
 
 def url2file(url):
-    """Convert URL to filename, i.e. `https://example.com/path/file.txt?auth` -> `file.txt`."""
+    """Convert URL to filename, e.g. `https://example.com/path/file.txt?auth` -> `file.txt`."""
     return Path(clean_url(url)).name or "download"
 
 
 def vscode_msg(ext="ultralytics.ultralytics-snippets") -> str:
-    """Display a message to install Ultralytics-Snippets for VS Code if not already installed."""
+    """Return a message to install Ultralytics-Snippets for VS Code, or an empty string if already installed."""
     path = (USER_CONFIG_DIR.parents[2] if WINDOWS else USER_CONFIG_DIR.parents[1]) / ".vscode/extensions"
     obs_file = path / ".obsolete"  # file tracks uninstalled extensions, while source directory remains
     installed = any(path.glob(f"{ext}*")) and ext not in (obs_file.read_text("utf-8") if obs_file.exists() else "")
@@ -1503,7 +1791,6 @@ def vscode_msg(ext="ultralytics.ultralytics-snippets") -> str:
 # Check first-install steps
 PREFIX = colorstr("Ultralytics: ")
 SETTINGS = SettingsManager()  # initialize settings
-PERSISTENT_CACHE = JSONDict(USER_CONFIG_DIR / "persistent_cache.json")  # initialize persistent cache
 DATASETS_DIR = Path(SETTINGS["datasets_dir"])  # global datasets directory
 WEIGHTS_DIR = Path(SETTINGS["weights_dir"])  # global weights directory
 RUNS_DIR = Path(SETTINGS["runs_dir"])  # global runs directory
@@ -1525,4 +1812,4 @@ set_sentry()
 torch.save = torch_save
 if WINDOWS:
     # Apply cv2 patches for non-ASCII and non-UTF characters in image paths
-    cv2.imread, cv2.imwrite, cv2.imshow = imread, imwrite, imshow
+    cv2.imread, cv2.imwrite, cv2.imshow = imread_unicode, imwrite, imshow

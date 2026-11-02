@@ -1,16 +1,18 @@
 ---
 comments: true
-description: Learn how to validate your YOLO26 model with precise metrics, easy-to-use tools, and custom settings for optimal performance.
+description: "Validate Ultralytics YOLO26 models with Val mode: mAP metrics, per-image precision and recall, validation arguments, and result export via Python or CLI."
 keywords: Ultralytics, YOLO26, model validation, machine learning, object detection, mAP metrics, Python API, CLI
 ---
 
 # Model Validation with Ultralytics YOLO
 
-<img width="1024" src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/ultralytics-yolov8-ecosystem-integrations.avif" alt="Ultralytics YOLO ecosystem and integrations">
+<img width="1024" src="https://cdn.ul.run/i/f874ab850f33f361d01a01e9a8c98655.avif" alt="Ultralytics YOLO ecosystem and integrations">
 
 ## Introduction
 
-Validation is a critical step in the [machine learning](https://www.ultralytics.com/glossary/machine-learning-ml) pipeline, allowing you to assess the quality of your trained models. Val mode in Ultralytics YOLO26 provides a robust suite of tools and metrics for evaluating the performance of your [object detection](https://www.ultralytics.com/glossary/object-detection) models. This guide serves as a complete resource for understanding how to effectively use the Val mode to ensure that your models are both accurate and reliable.
+Validation is a critical step in the [machine learning](https://www.ultralytics.com/glossary/machine-learning-ml) pipeline, allowing you to [assess the quality of your trained models](https://academy.ultralytics.com/courses/train-your-first-yolo/validate-and-diagnose). Val mode in Ultralytics YOLO26 provides tools and metrics for evaluating [object detection](https://www.ultralytics.com/glossary/object-detection) models and every other supported task. This guide explains how to use Val mode to confirm that your models are accurate and reliable.
+
+See the [unreleased YOLO27 preview](../models/yolo27.md#performance-metrics) for preliminary validation results.
 
 <p align="center">
   <br>
@@ -25,29 +27,29 @@ Validation is a critical step in the [machine learning](https://www.ultralytics.
 
 ## Why Validate with Ultralytics YOLO?
 
-Here's why using YOLO26's Val mode is advantageous:
+Reasons to use YOLO26's Val mode:
 
-- **Precision:** Get accurate metrics like mAP50, mAP75, and mAP50-95 to comprehensively evaluate your model.
-- **Convenience:** Utilize built-in features that remember training settings, simplifying the validation process.
+- **Precision:** Get accurate metrics like mAP<sub>50</sub>, mAP<sub>75</sub>, and [mAP<sub>50-95</sub>](https://www.ultralytics.com/glossary/mean-average-precision-map) to evaluate your model comprehensively.
+- **Convenience:** Use built-in features that remember training settings, simplifying the validation process.
 - **Flexibility:** Validate your model with the same or different datasets and image sizes.
 - **[Hyperparameter Tuning](https://www.ultralytics.com/glossary/hyperparameter-tuning):** Use validation metrics to fine-tune your model for better performance.
 
 ### Key Features of Val Mode
 
-These are the notable functionalities offered by YOLO26's Val mode:
+Notable features of YOLO26's Val mode:
 
 - **Automated Settings:** Models remember their training configurations for straightforward validation.
-- **Multi-Metric Support:** Evaluate your model based on a range of accuracy metrics.
-- **CLI and Python API:** Choose from command-line interface or Python API based on your preference for validation.
-- **Data Compatibility:** Works seamlessly with datasets used during the training phase as well as custom datasets.
+- **Multi-Metric Support:** Evaluate your model with a range of [accuracy metrics](../guides/yolo-performance-metrics.md).
+- **CLI and Python API:** Validate from the command-line interface or the Python API, whichever you prefer.
+- **Data Compatibility:** Works with the datasets used during training as well as custom datasets.
 
 !!! tip
 
-    * YOLO26 models automatically remember their training settings, so you can validate a model at the same image size and on the original dataset easily with just `yolo val model=yolo26n.pt` or `YOLO("yolo26n.pt").val()`
+    * YOLO26 models automatically remember their training settings, so `yolo val model=path/to/best.pt` or `YOLO("path/to/best.pt").val()` validates at the training image size on the original dataset. Official weights fall back to the task default dataset; pass `data` to override.
 
 ## Usage Examples
 
-Validate a trained YOLO26n model [accuracy](https://www.ultralytics.com/glossary/accuracy) on the COCO8 dataset. No arguments are needed as the `model` retains its training `data` and arguments as model attributes. See the Arguments section below for a full list of validation arguments.
+Validate the [accuracy](https://www.ultralytics.com/glossary/accuracy) of a trained [YOLO26n](https://platform.ultralytics.com/ultralytics/yolo26/yolo26n) model. No arguments are needed, as the `model` retains its training `data` and arguments as model attributes: `path/to/best.pt` validates on the dataset it was trained on. Official weights record a training dataset path that doesn't exist on your machine, so they fall back to the task default `coco8.yaml` with a warning. Pass `data` to validate on another dataset.
 
 !!! warning "Windows Multi-Processing Error"
 
@@ -69,24 +71,34 @@ Validate a trained YOLO26n model [accuracy](https://www.ultralytics.com/glossary
         metrics.box.map  # map50-95
         metrics.box.map50  # map50
         metrics.box.map75  # map75
-        metrics.box.maps  # a list containing mAP50-95 for each category
+        metrics.box.maps  # mAP50-95 per class; classes absent from the val set hold the overall mAP
+        metrics.box.ap_class_index  # class indices that were actually evaluated
         metrics.box.image_metrics  # per-image metrics dictionary with precision, recall, F1, TP, FP, and FN
         ```
 
     === "CLI"
 
         ```bash
-        yolo detect val model=yolo26n.pt      # val official model
-        yolo detect val model=path/to/best.pt # val custom model
+        yolo detect val model=yolo26n.pt data=coco8.yaml             # val official model
+        yolo detect val model=path/to/best.pt data=path/to/data.yaml # val custom model
         ```
 
 ## Arguments for YOLO Model Validation
 
-When validating YOLO models, several arguments can be fine-tuned to optimize the evaluation process. These arguments control aspects such as input image size, batch processing, and performance thresholds. Below is a detailed breakdown of each argument to help you customize your validation settings effectively.
+When validating YOLO models, several arguments can be adjusted to tailor the evaluation process. These arguments control aspects such as input image size, batch processing, and performance thresholds. Each argument is described below.
 
 {% include "macros/validation-args.md" %}
 
-Each of these settings plays a vital role in the validation process, allowing for a customizable and efficient evaluation of YOLO models. Adjusting these parameters according to your specific needs and resources can help achieve the best balance between accuracy and performance.
+Adjusting these settings to your specific needs and resources helps you strike the right balance between evaluation accuracy and speed.
+
+### Rectangular validation geometry (`rect`)
+
+Static exports use their recorded `(height, width)` input shape, including non-square exports, for validation. For example,
+`YOLO("yolo26n.onnx").val(data="coco8.yaml")` uses a `384×640` input if the model was exported with `imgsz=(384, 640)`.
+
+For detection, instance segmentation, pose, and OBB, rectangular validation (`rect=True`) rounds each batch dimension up using `ceil(shape * imgsz / stride + 0.5) * stride`, where `shape` is the batch's normalized height or width. The resulting padding is split between opposite sides. For example, a square 640×640 image validated at `imgsz=640` with stride 32 uses a 672×672 input with 16 px of padding on each side, while `predict()` uses 640×640 without padding.
+
+This difference can affect validation metrics. For square, stride-aligned inputs, `model.val(rect=False)` matches the geometry of `predict()` and square fixed-shape exports. During training, these YOLO tasks use rectangular validation batches regardless of the training `rect` setting, so `model.train(rect=False)` still selects `best.pt` using rectangular validation. Other tasks differ: semantic segmentation adds no extra validation padding, depth disables rectangular validation, classification ignores `rect`, and RT-DETR uses its own dataset builder with `rect=False`.
 
 ### Example Validation with Arguments
 
@@ -103,7 +115,7 @@ Each of these settings plays a vital role in the validation process, allowing fo
 
 <a href="https://github.com/ultralytics/notebooks/blob/main/notebooks/how-to-export-the-validation-results-into-dataframe-csv-sql-and-other-formats.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Explore model validation and different export methods in Google Colab"></a>
 
-The below examples showcase YOLO model validation with custom arguments in Python and CLI.
+The examples below run YOLO model validation with custom arguments in Python and the CLI.
 
 !!! example
 
@@ -127,7 +139,7 @@ The below examples showcase YOLO model validation with custom arguments in Pytho
 
 !!! tip "Export ConfusionMatrix"
 
-    You can also save the ConfusionMatrix results in different formats using the provided code.
+    You can also export [confusion matrix](https://www.ultralytics.com/glossary/confusion-matrix) results in different formats, for example as a DataFrame:
 
     ```python
     from ultralytics import YOLO
@@ -140,7 +152,7 @@ The below examples showcase YOLO model validation with custom arguments in Pytho
 
 !!! tip "Per-Image Precision, Recall, and F1"
 
-    Validation stores per-image precision, recall, F1, TP, FP, and FN metrics (at IoU threshold 0.5) for all tasks
+    Validation stores per-image [precision](https://www.ultralytics.com/glossary/precision), [recall](https://www.ultralytics.com/glossary/recall), F1, TP, FP, and FN metrics (at IoU threshold 0.5) for all tasks
     except classification. Access them through `results.box.image_metrics` for detection and OBB, `results.seg.image_metrics`
     for segmentation, and `results.pose.image_metrics` for pose after validation completes.
 
@@ -164,7 +176,7 @@ The below examples showcase YOLO model validation with custom arguments in Pytho
     Each entry in `image_metrics` contains the following keys:
 
     | Key         | Description                                       |
-    |-------------|---------------------------------------------------|
+    | ----------- | ------------------------------------------------- |
     | `precision` | Precision score for the image (`tp / (tp + fp)`). |
     | `recall`    | Recall score for the image (`tp / (tp + fn)`).    |
     | `f1`        | Harmonic mean of precision and recall.            |
@@ -174,6 +186,8 @@ The below examples showcase YOLO model validation with custom arguments in Pytho
 
     This feature is available for detection, segmentation, pose, and OBB tasks.
 
+The returned metrics object also exposes export helpers from [`DataExportMixin`](../reference/utils/__init__.md#ultralytics.utils.__init__.DataExportMixin) for downstream analysis:
+
 | Method      | Return Type            | Description                                                                |
 | ----------- | ---------------------- | -------------------------------------------------------------------------- |
 | `summary()` | `List[Dict[str, Any]]` | Converts validation results to a summarized dictionary.                    |
@@ -181,7 +195,9 @@ The below examples showcase YOLO model validation with custom arguments in Pytho
 | `to_csv()`  | `str`                  | Exports the validation results in CSV format and returns the CSV string.   |
 | `to_json()` | `str`                  | Exports the validation results in JSON format and returns the JSON string. |
 
-For more details see the [`DataExportMixin` class documentation](../reference/utils/__init__.md#ultralytics.utils.__init__.DataExportMixin).
+## What's Next
+
+Happy with the metrics? [Export the model](export.md) to a deployment format. If accuracy is off, [go back and retrain](train.md) with different [hyperparameters](../guides/hyperparameter-tuning.md) or more training data.
 
 ## FAQ
 
@@ -203,7 +219,7 @@ print(metrics.box.map)  # map50-95
 Alternatively, you can use the command-line interface (CLI):
 
 ```bash
-yolo val model=yolo26n.pt
+yolo detect val model=yolo26n.pt data=coco8.yaml
 ```
 
 For further customization, you can adjust various arguments like `imgsz`, `batch`, and `conf` in both Python and CLI modes. Check the [Arguments for YOLO Model Validation](#arguments-for-yolo-model-validation) section for the full list of parameters.
@@ -212,9 +228,9 @@ For further customization, you can adjust various arguments like `imgsz`, `batch
 
 YOLO26 model validation provides several key metrics to assess model performance. These include:
 
-- mAP50 (mean Average Precision at IoU threshold 0.5)
-- mAP75 (mean Average Precision at IoU threshold 0.75)
-- mAP50-95 (mean Average Precision across multiple IoU thresholds from 0.5 to 0.95)
+- mAP<sub>50</sub> ([mean Average Precision](https://www.ultralytics.com/blog/mean-average-precision-map-in-object-detection) at [IoU](https://www.ultralytics.com/glossary/intersection-over-union-iou) threshold 0.5)
+- mAP<sub>75</sub> (mean Average Precision at IoU threshold 0.75)
+- mAP<sub>50-95</sub> (mean Average Precision across multiple IoU thresholds from 0.5 to 0.95)
 
 Using the Python API, you can access these metrics as follows:
 
@@ -223,30 +239,31 @@ metrics = model.val()  # assumes `model` has been loaded
 print(metrics.box.map)  # mAP50-95
 print(metrics.box.map50)  # mAP50
 print(metrics.box.map75)  # mAP75
-print(metrics.box.maps)  # list of mAP50-95 for each category
+print(metrics.box.maps)  # mAP50-95 per class; classes absent from the val set hold the overall mAP
+print(metrics.box.ap_class_index)  # class indices that were actually evaluated
 print(metrics.box.image_metrics)  # per-image metrics dictionary with precision, recall, F1, TP, FP, and FN
 ```
 
-For a complete performance evaluation, it's crucial to review all these metrics. For more details, refer to the [Key Features of Val Mode](#key-features-of-val-mode).
+Review all of these metrics for a complete performance evaluation.
 
 ### What are the advantages of using Ultralytics YOLO for validation?
 
 Using Ultralytics YOLO for validation provides several advantages:
 
-- **[Precision](https://www.ultralytics.com/glossary/precision):** YOLO26 offers accurate performance metrics including mAP50, mAP75, and mAP50-95.
+- **Precision:** YOLO26 offers accurate performance metrics including mAP<sub>50</sub>, mAP<sub>75</sub>, and mAP<sub>50-95</sub>.
 - **Convenience:** The models remember their training settings, making validation straightforward.
 - **Flexibility:** You can validate against the same or different datasets and image sizes.
 - **Hyperparameter Tuning:** Validation metrics help in fine-tuning models for better performance.
 
-These benefits ensure that your models are evaluated thoroughly and can be optimized for superior results. Learn more about these advantages in the [Why Validate with Ultralytics YOLO](#why-validate-with-ultralytics-yolo) section.
+These [benefits](#why-validate-with-ultralytics-yolo) help you evaluate models thoroughly and optimize them.
 
 ### Can I validate my YOLO26 model using a custom dataset?
 
-Yes, you can validate your YOLO26 model using a [custom dataset](../datasets/index.md). Specify the `data` argument with the path to your dataset configuration file. This file should include the path to the [validation data](https://www.ultralytics.com/glossary/validation-data).
+Yes, you can validate your YOLO26 model using a [custom dataset](../datasets/index.md). Specify the `data` argument with the path to your dataset YAML, which should include the path to the [validation data](https://www.ultralytics.com/glossary/validation-data). Classification instead takes a dataset directory or a built-in dataset name (e.g., `imagenet10`).
 
 !!! note
 
-    Validation is performed using the model's own class names, which you can view using `model.names`, and which may be different to those specified in the dataset configuration file.
+    Validation is performed using the model's own class names, which you can view using `model.names`, and which may differ from those the dataset defines.
 
 Example in Python:
 
@@ -291,4 +308,4 @@ Example using CLI:
 yolo val model=yolo26n.pt save_json=True
 ```
 
-This functionality is particularly useful for further analysis or integration with other tools. Check the [Arguments for YOLO Model Validation](#arguments-for-yolo-model-validation) for more details.
+On detection datasets, `save_json=True` also reports small-, medium-, and large-object mAP through `faster-coco-eval`. Check the [Arguments for YOLO Model Validation](#arguments-for-yolo-model-validation) for more details.

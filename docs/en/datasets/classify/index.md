@@ -1,6 +1,6 @@
 ---
 comments: true
-description: Learn how to structure datasets for YOLO classification tasks. Detailed folder structure and usage examples for effective training.
+description: Structure image classification datasets for Ultralytics YOLO, with the train/val folder layout, automatic 80/20 splitting, and supported datasets like ImageNet.
 keywords: YOLO, image classification, dataset structure, CIFAR-10, Ultralytics, machine learning, training data, model evaluation
 ---
 
@@ -8,7 +8,7 @@ keywords: YOLO, image classification, dataset structure, CIFAR-10, Ultralytics, 
 
 ## Dataset Structure for YOLO Classification Tasks
 
-For [Ultralytics](https://www.ultralytics.com/) YOLO classification tasks, the dataset must be organized in a specific split-directory structure under the `root` directory to facilitate proper training, testing, and optional validation processes. This structure includes separate directories for training (`train`) and validation (`val`) phases, with an optional directory for testing (`test`).
+For [Ultralytics](https://www.ultralytics.com) YOLO classification tasks, the dataset must be organized in a specific split-directory structure under the `root` directory. This structure includes a `train` directory and a `val` directory (`valid` and `validation` are also accepted), with an optional `test` directory. If no validation directory exists, the `test` directory is used for validation instead. If the root has no `train` directory at all but contains one folder per class, Ultralytics automatically splits the images 80/20 into a new `<root>_split` directory with `train` and `val` subdirectories.
 
 Each of these directories should contain one subdirectory for each class in the dataset. The subdirectories are named after the corresponding class and contain all the images for that class. Ensure that each image file is named uniquely and stored in a common format such as JPEG or PNG.
 
@@ -17,7 +17,7 @@ Each of these directories should contain one subdirectory for each class in the 
 Consider the [CIFAR-10](cifar10.md) dataset as an example. The folder structure should look like this:
 
 ```text
-cifar-10-/
+cifar10/
 |
 |-- train/
 |   |-- airplane/
@@ -37,7 +37,7 @@ cifar-10-/
 |   |
 |   |-- ...
 |
-|-- test/
+|-- test/ (optional)
 |   |-- airplane/
 |   |   |-- 10_airplane.png
 |   |   |-- 11_airplane.png
@@ -55,7 +55,7 @@ cifar-10-/
 |   |
 |   |-- ...
 |
-|-- val/ (optional)
+|-- val/
 |   |-- airplane/
 |   |   |-- 105_airplane.png
 |   |   |-- 106_airplane.png
@@ -105,14 +105,14 @@ This structured approach ensures that the model can effectively learn from well-
 
 ## Supported Datasets
 
-Ultralytics supports the following datasets with automatic download:
+Ultralytics supports the following datasets with automatic download. Most of these datasets are also hosted on [Ultralytics Platform](https://platform.ultralytics.com), where you can browse the images and annotations, view dataset statistics, and clone them for cloud training.
 
 - [Caltech 101](caltech101.md): A dataset containing images of 101 object categories for [image classification](https://www.ultralytics.com/glossary/image-classification) tasks.
 - [Caltech 256](caltech256.md): An extended version of Caltech 101 with 256 object categories and more challenging images.
 - [CIFAR-10](cifar10.md): A dataset of 60K 32x32 color images in 10 classes, with 6K images per class.
 - [CIFAR-100](cifar100.md): An extended version of CIFAR-10 with 100 object categories and 600 images per class.
 - [Fashion-MNIST](fashion-mnist.md): A dataset consisting of 70,000 grayscale images of 10 fashion categories for image classification tasks.
-- [ImageNet](imagenet.md): A large-scale dataset for [object detection](https://www.ultralytics.com/glossary/object-detection) and image classification with over 14 million images and 20,000 categories.
+- [ImageNet](imagenet.md): The ImageNet-1k (ILSVRC-2012) image classification benchmark with 1,000 classes, 1.28 million training images, and 50,000 validation images.
 - [ImageNet-10](imagenet10.md): A smaller subset of ImageNet with 10 categories for faster experimentation and testing.
 - [Imagenette](imagenette.md): A smaller subset of ImageNet that contains 10 easily distinguishable classes for quicker training and testing.
 - [Imagewoof](imagewoof.md): A more challenging subset of ImageNet containing 10 dog breed categories for image classification tasks.
@@ -121,27 +121,27 @@ Ultralytics supports the following datasets with automatic download:
 
 ### Adding your own dataset
 
-If you have your own dataset and would like to use it for training classification models with Ultralytics YOLO, ensure that it follows the format specified above under "Dataset Structure" and then point your `data` argument to the dataset directory when initializing your training script.
+If you have your own dataset and would like to use it for [training classification models](https://academy.ultralytics.com/courses/beyond-detection/train-an-image-classifier) with Ultralytics YOLO, ensure that it follows the format specified above under "Dataset Structure" and then point your `data` argument to the dataset directory when initializing your training script.
 
 ## FAQ
 
 ### How do I structure my dataset for YOLO classification tasks?
 
-To structure your dataset for Ultralytics YOLO classification tasks, you should follow a specific split-directory format. Organize your dataset into separate directories for `train`, `test`, and optionally `val`. Each of these directories should contain subdirectories named after each class, with the corresponding images inside. This facilitates smooth training and evaluation processes. For an example, consider the [CIFAR-10](cifar10.md) dataset format:
+To structure your dataset for Ultralytics YOLO classification tasks, you should follow a specific split-directory format. Organize your dataset into separate directories for `train` and `val`, and optionally `test`. Each of these directories should contain subdirectories named after each class, with the corresponding images inside. This facilitates smooth training and evaluation processes. For an example, consider the [CIFAR-10](cifar10.md) dataset format:
 
 ```text
-cifar-10-/
+cifar10/
 |-- train/
 |   |-- airplane/
 |   |-- automobile/
 |   |-- bird/
 |   ...
-|-- test/
+|-- val/
 |   |-- airplane/
 |   |-- automobile/
 |   |-- bird/
 |   ...
-|-- val/ (optional)
+|-- test/ (optional)
 |   |-- airplane/
 |   |-- automobile/
 |   |-- bird/
@@ -156,7 +156,7 @@ Ultralytics YOLO supports automatic downloading of several datasets for image cl
 
 ### How do I add my own dataset for YOLO image classification?
 
-To use your own dataset with Ultralytics YOLO, ensure it follows the specified directory format required for the classification task, with separate `train`, `test`, and optionally `val` directories, and subdirectories for each class containing the respective images. Once your dataset is structured correctly, point the `data` argument to your dataset's root directory when initializing the training script. Here's an example in Python:
+To use your own dataset with Ultralytics YOLO, ensure it follows the specified directory format required for the classification task, with separate `train` and `val` directories (and optionally `test`), and subdirectories for each class containing the respective images. Once your dataset is structured correctly, point the `data` argument to your dataset's root directory when initializing the training script. Here's an example in Python:
 
 ```python
 from ultralytics import YOLO
@@ -176,15 +176,15 @@ Ultralytics YOLO offers several benefits for image classification, including:
 
 - **Pretrained Models**: Load pretrained models like `yolo26n-cls.pt` to jump-start your training process.
 - **Ease of Use**: Simple API and CLI commands for training and evaluation.
-- **High Performance**: State-of-the-art [accuracy](https://www.ultralytics.com/glossary/accuracy) and speed, ideal for real-time applications.
-- **Support for Multiple Datasets**: Seamless integration with various popular datasets like [CIFAR-10](cifar10.md), [ImageNet](imagenet.md), and more.
+- **High Performance**: Strong [accuracy](https://www.ultralytics.com/glossary/accuracy) and speed, suitable for real-time applications.
+- **Support for Multiple Datasets**: Built-in support for popular datasets like [CIFAR-10](cifar10.md), [ImageNet](imagenet.md), and more.
 - **Community and Support**: Access to extensive documentation and an active community for troubleshooting and improvements.
 
 For additional insights and real-world applications, you can explore [Ultralytics YOLO](https://www.ultralytics.com/yolo).
 
 ### How can I train a model using Ultralytics YOLO?
 
-Training a model using Ultralytics YOLO can be done easily in both Python and CLI. Here's an example:
+You can train a model with Ultralytics YOLO from either Python or the CLI. Here's an example:
 
 !!! example
 

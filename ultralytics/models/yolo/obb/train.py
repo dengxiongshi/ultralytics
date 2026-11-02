@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from copy import copy
-from pathlib import Path
+
+import torch
 
 from ultralytics.models import yolo
 from ultralytics.nn.tasks import OBBModel
@@ -17,8 +18,7 @@ class OBBTrainer(yolo.detect.DetectionTrainer):
     objects at arbitrary angles rather than just axis-aligned rectangles.
 
     Attributes:
-        loss_names (tuple): Names of the loss components used during training including box_loss, cls_loss, dfl_loss,
-            and angle_loss.
+        loss_names (tuple): Names of the loss components, derived from the loss dict returned by the criterion.
 
     Methods:
         get_model: Return OBBModel initialized with specified config and weights.
@@ -47,14 +47,15 @@ class OBBTrainer(yolo.detect.DetectionTrainer):
         super().__init__(cfg, overrides, _callbacks)
 
     def get_model(
-        self, cfg: str | dict | None = None, weights: str | Path | None = None, verbose: bool = True
+        self, cfg: str | dict | None = None, weights: torch.nn.Module | None = None, verbose: bool = True
     ) -> OBBModel:
         """Return OBBModel initialized with specified config and weights.
 
         Args:
             cfg (str | dict, optional): Model configuration. Can be a path to a YAML config file, a dictionary
                 containing configuration parameters, or None to use default configuration.
-            weights (str | Path, optional): Path to pretrained weights file. If None, random initialization is used.
+            weights (torch.nn.Module, optional): Pretrained model whose weights are loaded into the new model. If None,
+                random initialization is used.
             verbose (bool): Whether to display model information during initialization.
 
         Returns:
@@ -62,7 +63,7 @@ class OBBTrainer(yolo.detect.DetectionTrainer):
 
         Examples:
             >>> trainer = OBBTrainer()
-            >>> model = trainer.get_model(cfg="yolo26n-obb.yaml", weights="yolo26n-obb.pt")
+            >>> model = trainer.get_model(cfg="yolo26n-obb.yaml")
         """
         model = self.set_model_names_for_load(
             OBBModel(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
@@ -74,7 +75,6 @@ class OBBTrainer(yolo.detect.DetectionTrainer):
 
     def get_validator(self):
         """Return an instance of OBBValidator for validation of YOLO model."""
-        self.loss_names = "box_loss", "cls_loss", "dfl_loss", "angle_loss"
         return yolo.obb.OBBValidator(
             self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks
         )

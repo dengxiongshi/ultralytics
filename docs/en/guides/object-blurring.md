@@ -5,11 +5,11 @@ description: Automatically detect and blur objects in real time with Ultralytics
 keywords: YOLO26, object blurring, real-time processing, privacy protection, face blurring, data anonymization, GDPR, image manipulation, video editing, Ultralytics
 ---
 
-# Object Blurring using Ultralytics YOLO26 🚀
+# Object Blurring using Ultralytics YOLO26
 
 ## What is Object Blurring?
 
-Object blurring with [Ultralytics YOLO26](https://github.com/ultralytics/ultralytics/) involves applying a blurring effect to specific detected objects in an image or video. This can be achieved using the YOLO26 model capabilities to identify and manipulate objects within a given scene.
+Object blurring with [Ultralytics YOLO26](https://github.com/ultralytics/ultralytics/) involves [applying a blurring effect](https://www.ultralytics.com/blog/how-yolov8-blurring-works-and-its-real-time-applications) to specific detected objects in an image or video. YOLO26 locates the objects in each frame, and the blur is applied only to the detected regions.
 
 <p align="center">
   <br>
@@ -24,9 +24,9 @@ Object blurring with [Ultralytics YOLO26](https://github.com/ultralytics/ultraly
 
 ## Advantages of Object Blurring
 
-- **Privacy Protection**: Object blurring is an effective tool for safeguarding privacy by concealing sensitive or personally identifiable information in images or videos.
+- **Privacy Protection**: Object blurring is an effective tool for safeguarding privacy by concealing sensitive or [personally identifiable information](https://www.ultralytics.com/glossary/data-privacy) in images or videos.
 - **Selective Focus**: YOLO26 allows for selective blurring, enabling users to target specific objects, ensuring a balance between privacy and retaining relevant visual information.
-- **Real-time Processing**: YOLO26's efficiency enables object blurring in real-time, making it suitable for applications requiring on-the-fly privacy enhancements in dynamic environments.
+- **Real-time Processing**: YOLO26's efficiency enables object blurring in [real time](https://www.ultralytics.com/glossary/real-time-inference), making it suitable for applications requiring on-the-fly privacy enhancements in dynamic environments.
 - **Regulatory Compliance**: Helps organizations comply with data protection regulations like GDPR by anonymizing identifiable information in visual content.
 - **Content Moderation**: Useful for blurring inappropriate or sensitive content in media platforms while preserving the overall context.
 
@@ -96,17 +96,16 @@ Pass your video to the `ObjectBlurrer` solution and it detects objects each fram
 Here's a table with the `ObjectBlurrer` arguments:
 
 {% from "macros/solutions-args.md" import param_table %}
-{{ param_table(["model", "blur_ratio"]) }}
+{{ param_table(["model", "blur_ratio", "line_width", "verbose"]) }}
 
 The `ObjectBlurrer` solution also supports a range of `track` arguments:
 
-{% from "macros/track-args.md" import param_table %}
-{{ param_table(["tracker", "conf", "iou", "classes", "verbose", "device"]) }}
+{% include "macros/solutions-track-args.md" %}
 
 Moreover, the following visualization arguments can be used:
 
 {% from "macros/visualization-args.md" import param_table %}
-{{ param_table(["show", "line_width", "show_conf", "show_labels"]) }}
+{{ param_table(["show", "show_conf", "show_labels"]) }}
 
 ## Real-World Applications
 
@@ -120,7 +119,7 @@ In [medical imaging](https://www.ultralytics.com/blog/ai-and-radiology-a-new-era
 
 ### Document Redaction
 
-When sharing documents that contain sensitive information, YOLO26 can automatically detect and blur specific elements like signatures, account numbers, or personal details, streamlining the redaction process while maintaining document integrity.
+When sharing documents that contain sensitive information, YOLO26 can automatically detect and blur specific elements like [signatures](https://platform.ultralytics.com/ultralytics/solutions/document-signature-detection-yolo26n), account numbers, or personal details, streamlining the redaction process while maintaining document integrity.
 
 ### Media and Content Creation
 
@@ -150,8 +149,8 @@ For more detailed applications, check the [advantages of object blurring section
 
 ### Can I use Ultralytics YOLO26 to blur faces in a video for privacy reasons?
 
-Yes, Ultralytics YOLO26 can be configured to detect and blur faces in videos to protect privacy. By training or using a pretrained model to specifically recognize faces, the detection results can be processed with [OpenCV](https://www.ultralytics.com/glossary/opencv) to apply a blur effect. Refer to our guide on [object detection with YOLO26](../models/yolo26.md) and modify the code to target face detection.
+Yes. Train or fine-tune a YOLO26 [detection model](../tasks/detect.md) for faces, for example on the [WIDER FACE dataset](https://platform.ultralytics.com/ultralytics/datasets/wider-face), then pass the trained weights to `ObjectBlurrer` with the `model` argument. Every detected face is then blurred with [OpenCV](https://www.ultralytics.com/glossary/opencv). To blur faces across a whole dataset without writing code, use [Blur Faces on Ultralytics Platform](../platform/data/datasets.md#blur-faces).
 
 ### How does YOLO26 compare to other object detection models like Faster R-CNN for object blurring?
 
-Ultralytics YOLO26 typically outperforms models like Faster R-CNN in terms of speed, making it more suitable for real-time applications. While both models offer accurate detection, YOLO26's architecture is optimized for rapid inference, which is critical for tasks like real-time object blurring. Learn more about the technical differences and performance metrics in our [YOLO26 documentation](../models/yolo26.md).
+Ultralytics YOLO26 is typically faster than [two-stage detectors](https://www.ultralytics.com/glossary/two-stage-object-detectors) like Faster R-CNN, making it more suitable for real-time applications. While both models offer accurate detection, [YOLO26's architecture](../models/yolo26.md) is optimized for rapid inference, which is critical for tasks like real-time object blurring.

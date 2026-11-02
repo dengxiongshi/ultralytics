@@ -13,7 +13,7 @@ keywords: Crack Segmentation Dataset, Ultralytics, transportation safety, public
 
 <a href="https://colab.research.google.com/github/ultralytics/notebooks/blob/main/notebooks/how-to-train-ultralytics-yolo-on-crack-segmentation-dataset.ipynb" target="_blank"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open Crack Segmentation Dataset In Colab"></a>
 
-The [Ultralytics](https://www.ultralytics.com/) Crack Segmentation Dataset provides 4,029 annotated images of cracks on roads and walls for training [instance segmentation](https://www.ultralytics.com/glossary/instance-segmentation) models on a single `crack` class. Captured across diverse pavement and structural scenarios, it pairs directly with [Ultralytics YOLO](../../models/yolo26.md) for use cases ranging from transportation safety and [self-driving car](https://www.ultralytics.com/blog/ai-in-self-driving-cars) perception to [infrastructure maintenance](https://www.ultralytics.com/blog/using-ai-for-crack-detection-and-segmentation) and structural [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) inspection.
+The [Ultralytics](https://www.ultralytics.com) Crack Segmentation Dataset provides 4,029 annotated images of cracks on roads and walls for training [instance segmentation](https://www.ultralytics.com/glossary/instance-segmentation) models on a single `crack` class. Captured across diverse pavement and structural scenarios, it pairs directly with [Ultralytics YOLO](../../models/yolo26.md) for use cases ranging from transportation safety and [self-driving car](https://www.ultralytics.com/blog/ai-in-self-driving-cars) perception to [infrastructure maintenance](https://www.ultralytics.com/blog/using-ai-for-crack-detection-and-segmentation) and structural [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) inspection.
 
 <p align="center">
   <br>
@@ -38,11 +38,11 @@ The Crack Segmentation Dataset splits its 4,029 images as follows:
 
 ## Applications
 
-Crack segmentation supports [infrastructure maintenance](https://www.ultralytics.com/blog/using-ai-for-crack-detection-and-segmentation) by identifying and assessing structural damage in buildings, bridges, and roads. It also enhances [road safety](https://www.who.int/news-room/fact-sheets/detail/road-traffic-injuries) by letting automated systems detect pavement cracks for timely repairs.
+Crack segmentation supports infrastructure maintenance by identifying and assessing structural damage in buildings, bridges, and roads. It also enhances [road safety](https://www.who.int/news-room/fact-sheets/detail/road-traffic-injuries) by letting automated systems detect pavement cracks for timely repairs.
 
-In industrial settings, crack detection with models like [Ultralytics YOLO26](../../models/yolo26.md) helps verify building integrity in construction, prevents costly downtime in [manufacturing](https://www.ultralytics.com/solutions/computer-vision-in-manufacturing), and makes road inspections safer. Automatically classifying cracks lets maintenance teams prioritize the most urgent repairs.
+In industrial settings, crack detection with models like Ultralytics YOLO26 helps verify building integrity in construction, prevents costly downtime in [manufacturing](https://www.ultralytics.com/solutions/computer-vision-in-manufacturing), and makes road inspections safer. Automatically classifying cracks lets maintenance teams prioritize the most urgent repairs.
 
-The complete Crack Segmentation Dataset can also be browsed and managed on [Ultralytics Platform](https://platform.ultralytics.com/).
+The complete Crack Segmentation Dataset can also be browsed and managed on [Ultralytics Platform](https://platform.ultralytics.com/ultralytics/datasets/crack-seg).
 
 ## Dataset YAML
 
@@ -56,7 +56,7 @@ A [YAML](https://www.ultralytics.com/glossary/yaml) file defines the dataset con
 
 ## Usage
 
-To train the Ultralytics YOLO26n-seg model on the Crack Segmentation dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 640, use the following [Python](https://www.python.org/) or CLI snippets. Refer to the model [Training](../../modes/train.md) documentation page for a comprehensive list of available arguments and configurations like [hyperparameter tuning](../../guides/hyperparameter-tuning.md).
+To [train](../../modes/train.md) the Ultralytics [YOLO26n-seg](https://platform.ultralytics.com/ultralytics/yolo26/yolo26n-seg) model on the Crack Segmentation dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 640, use the following [Python](https://www.python.org/) or CLI snippets.
 
 !!! example "Train Example"
 
@@ -87,9 +87,9 @@ To train the Ultralytics YOLO26n-seg model on the Crack Segmentation dataset for
 
 ## Sample Data and Annotations
 
-Below is an example from the Crack Segmentation Dataset with its [instance segmentation](https://www.ultralytics.com/glossary/instance-segmentation) masks overlaid, outlining identified cracks on road and wall surfaces:
+Below is an example from the Crack Segmentation Dataset with its instance segmentation masks overlaid, outlining identified cracks on road and wall surfaces:
 
-![Crack segmentation dataset sample for infrastructure inspection](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/crack-segmentation-sample.avif)
+![Crack segmentation dataset sample for infrastructure inspection](https://cdn.ul.run/i/092b136a768c01ed0b130e1cc839f7e2.avif)
 
 The dataset spans varied locations, surfaces, and lighting conditions, so models trained on it see the range of real-world scenes they need to generalize across. [Data augmentation](https://www.ultralytics.com/glossary/data-augmentation) can broaden that variety further — see our [instance segmentation and tracking guide](../../guides/instance-segmentation-and-tracking.md) for related workflows.
 
@@ -97,7 +97,7 @@ The dataset spans varied locations, surfaces, and lighting conditions, so models
 
 If you use the Crack Segmentation dataset in your research or development work, please cite the source appropriately:
 
-!!! quote ""
+!!! quote "Citation"
 
     === "BibTeX"
 
@@ -131,7 +131,7 @@ Load a pretrained segmentation model (e.g., `yolo26n-seg.pt`) and train it with 
 
 ### Why use the Crack Segmentation Dataset for self-driving car and infrastructure projects?
 
-Its diverse images of cracks across roads and walls cover many real-world scenarios, improving the robustness of models trained for crack detection. Accurate segmentation supports [road safety](https://www.ultralytics.com/blog/ai-in-self-driving-cars) and infrastructure-assessment systems that must identify potential hazards reliably — see the [Applications](#applications) section above and our [model training tips](../../guides/model-training-tips.md) for best practices.
+Its diverse images of cracks across roads and walls cover many real-world scenarios, improving the robustness of models trained for crack detection. Accurate segmentation supports road safety and infrastructure-assessment systems that must identify potential hazards reliably.
 
 ### Where can I find the dataset configuration file for Crack Segmentation?
 

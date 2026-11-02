@@ -14,8 +14,8 @@ from __future__ import annotations
 import itertools
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from ultralytics.nn.modules import LayerNorm2d
 from ultralytics.utils.instance import to_2tuple
@@ -282,7 +282,7 @@ class ConvLayer(nn.Module):
         depth: int,
         activation,
         drop_path: float | list[float] = 0.0,
-        downsample: nn.Module | None = None,
+        downsample: type[nn.Module] | None = None,
         use_checkpoint: bool = False,
         out_dim: int | None = None,
         conv_expand_ratio: float = 4.0,
@@ -298,7 +298,8 @@ class ConvLayer(nn.Module):
             depth (int): The number of MBConv layers in the block.
             activation (nn.Module): Activation function applied after each convolution.
             drop_path (float | list[float], optional): Drop path rate. Single float or a list of floats for each MBConv.
-            downsample (nn.Module | None, optional): Function for downsampling the output. None to skip downsampling.
+            downsample (type[nn.Module] | None, optional): Downsampling layer class applied to the output. None to skip
+                downsampling.
             use_checkpoint (bool, optional): Whether to use gradient checkpointing to save memory.
             out_dim (int | None, optional): Output dimensions. None means it will be the same as `dim`.
             conv_expand_ratio (float, optional): Expansion ratio for the MBConv layers.
@@ -685,7 +686,7 @@ class BasicLayer(nn.Module):
         mlp_ratio: float = 4.0,
         drop: float = 0.0,
         drop_path: float | list[float] = 0.0,
-        downsample: nn.Module | None = None,
+        downsample: type[nn.Module] | None = None,
         use_checkpoint: bool = False,
         local_conv_size: int = 3,
         activation=nn.GELU,
@@ -706,7 +707,7 @@ class BasicLayer(nn.Module):
             drop (float, optional): Dropout rate.
             drop_path (float | list[float], optional): Stochastic depth rate. Can be a float or a list of floats for
                 each block.
-            downsample (nn.Module | None, optional): Downsampling layer at the end of the layer. None to skip
+            downsample (type[nn.Module] | None, optional): Downsampling layer at the end of the layer. None to skip
                 downsampling.
             use_checkpoint (bool, optional): Whether to use gradient checkpointing to save memory.
             local_conv_size (int, optional): Kernel size for the local convolution in each TinyViT block.
@@ -766,7 +767,7 @@ class TinyViT(nn.Module):
         img_size (int): Input image size.
         num_classes (int): Number of classification classes.
         depths (tuple[int, int, int, int]): Number of blocks in each stage.
-        num_layers (int): Total number of layers in the network.
+        num_layers (int): Number of stages in the network.
         mlp_ratio (float): Ratio of MLP hidden dimension to embedding dimension.
         patch_embed (PatchEmbed): Module for patch embedding.
         patches_resolution (tuple[int, int]): Resolution of embedded patches.
@@ -843,21 +844,21 @@ class TinyViT(nn.Module):
         # Build layers
         self.layers = nn.ModuleList()
         for i_layer in range(self.num_layers):
-            kwargs = dict(
-                dim=embed_dims[i_layer],
-                input_resolution=(
+            kwargs = {
+                "dim": embed_dims[i_layer],
+                "input_resolution": (
                     patches_resolution[0] // (2 ** (i_layer - 1 if i_layer == 3 else i_layer)),
                     patches_resolution[1] // (2 ** (i_layer - 1 if i_layer == 3 else i_layer)),
                 ),
                 #   input_resolution=(patches_resolution[0] // (2 ** i_layer),
                 #                     patches_resolution[1] // (2 ** i_layer)),
-                depth=depths[i_layer],
-                drop_path=dpr[sum(depths[:i_layer]) : sum(depths[: i_layer + 1])],
-                downsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
-                use_checkpoint=use_checkpoint,
-                out_dim=embed_dims[min(i_layer + 1, len(embed_dims) - 1)],
-                activation=activation,
-            )
+                "depth": depths[i_layer],
+                "drop_path": dpr[sum(depths[:i_layer]) : sum(depths[: i_layer + 1])],
+                "downsample": PatchMerging if (i_layer < self.num_layers - 1) else None,
+                "use_checkpoint": use_checkpoint,
+                "out_dim": embed_dims[min(i_layer + 1, len(embed_dims) - 1)],
+                "activation": activation,
+            }
             if i_layer == 0:
                 layer = ConvLayer(conv_expand_ratio=mbconv_expand_ratio, **kwargs)
             else:
@@ -913,10 +914,10 @@ class TinyViT(nn.Module):
         i = 0
         for layer in self.layers:
             for block in layer.blocks:
-                block.apply(lambda x: _set_lr_scale(x, lr_scales[i]))
+                block.apply(lambda x, scale=lr_scales[i]: _set_lr_scale(x, scale))
                 i += 1
             if layer.downsample is not None:
-                layer.downsample.apply(lambda x: _set_lr_scale(x, lr_scales[i - 1]))
+                layer.downsample.apply(lambda x, scale=lr_scales[i - 1]: _set_lr_scale(x, scale))
         assert i == depth
         for m in {self.norm_head, self.head}:
             m.apply(lambda x: _set_lr_scale(x, lr_scales[-1]))

@@ -8,12 +8,14 @@ license:
     name: MIT
     url: https://github.com/zalandoresearch/fashion-mnist/blob/master/LICENSE
 description: Train YOLO image classification models on Fashion-MNIST, a benchmark of 70,000 28x28 grayscale Zalando clothing images in 10 balanced classes, split 60k/10k.
-keywords: Fashion-MNIST, image classification, Zalando dataset, machine learning, deep learning, CNN, YOLO, computer vision, dataset overview
+keywords: Fashion-MNIST, image classification, Zalando dataset, machine learning, deep learning, CNN, YOLO, computer vision, clothing classification
 ---
 
 # Fashion-MNIST Dataset
 
 The [Fashion-MNIST](https://github.com/zalandoresearch/fashion-mnist) dataset is an [image classification](https://www.ultralytics.com/glossary/image-classification) benchmark of 70,000 28x28 grayscale images of Zalando's clothing articles, evenly split across 10 classes — T-shirt/top, trouser, pullover, dress, coat, sandal, shirt, sneaker, bag, and ankle boot. It ships with a predefined split of 60,000 training and 10,000 test images (7,000 per class) and serves as a drop-in replacement for the original [MNIST](mnist.md) dataset for benchmarking [machine learning](https://www.ultralytics.com/glossary/machine-learning-ml) algorithms. For the color-image equivalent, see the related [CIFAR-10](cifar10.md) dataset.
+
+Explore [Fashion-MNIST on Ultralytics Platform](https://platform.ultralytics.com/ultralytics/datasets/fashion-mnist) to preview samples, inspect dataset statistics, and clone it for training.
 
 <p align="center">
   <br>
@@ -23,7 +25,7 @@ The [Fashion-MNIST](https://github.com/zalandoresearch/fashion-mnist) dataset is
     allowfullscreen>
   </iframe>
   <br>
-  <strong>Watch:</strong> How to do <a href="https://www.ultralytics.com/glossary/image-classification">Image Classification</a> on Fashion-MNIST using Ultralytics YOLO
+  <strong>Watch:</strong> How to do Image Classification on Fashion-MNIST using Ultralytics YOLO
 </p>
 
 ## Key Features
@@ -32,7 +34,7 @@ The [Fashion-MNIST](https://github.com/zalandoresearch/fashion-mnist) dataset is
 - Each class holds exactly 7,000 images — 6,000 for training and 1,000 for testing — so the dataset is perfectly balanced.
 - It is a drop-in replacement for MNIST: identical image size, format, and split structure, but with harder clothing categories instead of handwritten digits.
 - The dataset ships with a predefined train/test split, so no manual or automatic splitting is required.
-- Fashion-MNIST is a standard benchmark for [image classification](https://www.ultralytics.com/glossary/image-classification) and [deep learning](https://www.ultralytics.com/glossary/deep-learning-dl) research.
+- Fashion-MNIST is a standard benchmark for image classification and [deep learning](https://www.ultralytics.com/glossary/deep-learning-dl) research.
 
 ## Dataset Structure
 
@@ -49,11 +51,11 @@ Fashion-MNIST ships with an official, predefined split, so no automatic or manua
 
 ## Applications
 
-Fashion-MNIST is widely used to train and evaluate [image classification](https://www.ultralytics.com/glossary/image-classification) models, from classic [Convolutional Neural Networks](https://www.ultralytics.com/glossary/convolutional-neural-network-cnn) (CNNs) and [Support Vector Machines](https://www.ultralytics.com/glossary/support-vector-machine-svm) (SVMs) to modern deep architectures. Its small grayscale images and 10 clothing categories make it a fast, reproducible benchmark for algorithm comparison and [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) experimentation, while being more challenging than the handwritten digits of MNIST.
+Fashion-MNIST is widely used to train and evaluate image classification models, from classic [Convolutional Neural Networks](https://www.ultralytics.com/glossary/convolutional-neural-network-cnn) (CNNs) and [Support Vector Machines](https://www.ultralytics.com/glossary/support-vector-machine-svm) (SVMs) to modern deep architectures. Its small grayscale images and 10 clothing categories make it a fast, reproducible benchmark for algorithm comparison and [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) experimentation, while being more challenging than the handwritten digits of MNIST.
 
 ## Usage
 
-Train a YOLO model on Fashion-MNIST for 100 [epochs](https://www.ultralytics.com/glossary/epoch) at an image size of 28. For the full list of available arguments, see the [Training](../../modes/train.md) page and the [image classification](../../tasks/classify.md) task guide.
+[Train](../../modes/train.md) a [YOLO26n-cls](https://platform.ultralytics.com/ultralytics/yolo26/yolo26n-cls) model on Fashion-MNIST for 100 [epochs](https://www.ultralytics.com/glossary/epoch) at an image size of 28.
 
 !!! example "Train Example"
 
@@ -80,7 +82,7 @@ Train a YOLO model on Fashion-MNIST for 100 [epochs](https://www.ultralytics.com
 
 Sample images from the Fashion-MNIST dataset:
 
-![Fashion-MNIST clothing classification dataset samples](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/fashion-mnist-sample.avif)
+![Fashion-MNIST clothing classification dataset samples](https://cdn.ul.run/i/a6bf21f75576305211b4f4c6054fa47d.avif)
 
 The samples show the variety of clothing categories in the Fashion-MNIST dataset, underlining the value of a varied dataset for training robust image classification models.
 
@@ -88,7 +90,7 @@ The samples show the variety of clothing categories in the Fashion-MNIST dataset
 
 If you use the Fashion-MNIST dataset in your research or development work, please cite the following paper:
 
-!!! quote ""
+!!! quote "Citation"
 
     === "BibTeX"
 
@@ -103,7 +105,7 @@ If you use the Fashion-MNIST dataset in your research or development work, pleas
         }
         ```
 
-We would like to acknowledge Zalando Research for creating and maintaining the Fashion-MNIST dataset as a valuable resource for the [machine learning](https://www.ultralytics.com/glossary/machine-learning-ml) and [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) research community. For more information about the Fashion-MNIST dataset and its creators, visit the [Fashion-MNIST GitHub repository](https://github.com/zalandoresearch/fashion-mnist).
+We would like to acknowledge Zalando Research for creating and maintaining the Fashion-MNIST dataset as a valuable resource for the machine learning and computer vision research community.
 
 ## FAQ
 

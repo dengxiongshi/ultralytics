@@ -1,13 +1,13 @@
 ---
 title: YOLOv5 on AWS Deep Learning Instances
 comments: true
-description: Discover how to set up and run Ultralytics YOLOv5 on AWS Deep Learning Instances. Follow our comprehensive guide to get started quickly and cost-effectively.
+description: Set up Ultralytics YOLOv5 on an AWS EC2 Deep Learning AMI. Pick a GPU instance, save with Spot pricing, connect over SSH, then train, validate and export.
 keywords: YOLOv5, AWS, Deep Learning, Machine Learning, AWS EC2, YOLOv5 setup, Deep Learning Instances, AI, Object Detection, Ultralytics
 ---
 
 # Ultralytics YOLOv5 🚀 on AWS Deep Learning Instance: Your Complete Guide
 
-Setting up a high-performance [deep learning](https://www.ultralytics.com/glossary/deep-learning-dl) environment can seem daunting, especially for newcomers. But fear not! 🛠️ This guide provides a step-by-step walkthrough for getting [Ultralytics YOLOv5](../../models/yolov5.md) up and running on an AWS Deep Learning instance. By leveraging the power of Amazon Web Services (AWS), even those new to [machine learning (ML)](https://www.ultralytics.com/glossary/machine-learning-ml) can start quickly and cost-effectively. The [scalability](https://www.ultralytics.com/glossary/scalability) of the AWS platform makes it ideal for both experimentation and production [deployment](../../guides/model-deployment-options.md).
+Setting up a high-performance [deep learning](https://www.ultralytics.com/glossary/deep-learning-dl) environment can seem daunting, especially for newcomers. This guide provides a step-by-step walkthrough for getting [Ultralytics YOLOv5](../../models/yolov5.md) up and running on an AWS Deep Learning instance. With Amazon Web Services (AWS), even those new to [machine learning (ML)](https://www.ultralytics.com/glossary/machine-learning-ml) can start quickly and cost-effectively. The [scalability](https://www.ultralytics.com/glossary/scalability) of the AWS platform makes it ideal for both experimentation and production [deployment](../../guides/model-deployment-options.md).
 
 Other quickstart options for YOLOv5 include our [Google Colab Notebook](https://colab.research.google.com/github/ultralytics/yolov5/blob/master/tutorial.ipynb) <a href="https://colab.research.google.com/github/ultralytics/yolov5/blob/master/tutorial.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a>, [Kaggle environments](https://www.kaggle.com/models/ultralytics/yolov5) <a href="https://www.kaggle.com/models/ultralytics/yolov5"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" alt="Open In Kaggle"></a>, [GCP Deep Learning VM](./google-cloud-quickstart-tutorial.md), and our pre-built Docker image available on [Docker Hub](https://hub.docker.com/r/ultralytics/yolov5) <a href="https://hub.docker.com/r/ultralytics/yolov5"><img src="https://img.shields.io/docker/pulls/ultralytics/yolov5?logo=docker" alt="Docker Pulls"></a>.
 
@@ -15,45 +15,45 @@ Other quickstart options for YOLOv5 include our [Google Colab Notebook](https://
 
 Begin by creating an account or signing in to the [AWS Management Console](https://aws.amazon.com/console/). Once logged in, navigate to the **EC2** service dashboard, where you can manage your virtual servers (instances).
 
-![AWS Management Console sign-in page](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/aws-console-sign-in.avif)
+![AWS Management Console sign-in page](https://cdn.ul.run/i/e50b2045e7e651c883af21cc2e72b568.avif)
 
 ## Step 2: Launch Your Instance
 
 From the EC2 dashboard, click the **Launch Instance** button. This initiates the process of creating a new virtual server tailored to your needs.
 
-![Launch Instance Button](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/launch-instance-button.avif)
+![Launch Instance Button](https://cdn.ul.run/i/d5daf1fcf7303313c9b8f563d13d1894.avif)
 
 ### Selecting the Right Amazon Machine Image (AMI)
 
 Choosing the correct AMI is crucial. This determines the operating system and pre-installed software for your instance. In the search bar, type '[Deep Learning](https://aws.amazon.com/ai/machine-learning/amis/)' and select the latest Ubuntu-based Deep Learning AMI (unless you have specific requirements for a different OS). Amazon's Deep Learning AMIs come pre-configured with popular [deep learning frameworks](https://aws.amazon.com/ai/machine-learning/amis/#Frameworks_and_Interface) (like [PyTorch](https://pytorch.org/), used by YOLOv5) and necessary [GPU drivers](https://developer.nvidia.com/cuda-downloads), significantly streamlining the setup process.
 
-![AWS EC2 Deep Learning AMI selection](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/choose-ami.avif)
+![AWS EC2 Deep Learning AMI selection](https://cdn.ul.run/i/978fb3ff9006edef91e71fbaf5ff60c6.avif)
 
 ### Picking an Instance Type
 
-For demanding tasks like training deep learning models, selecting a GPU-accelerated instance type is highly recommended. GPUs can dramatically reduce the time required for model training compared to CPUs. When choosing an instance size, ensure its memory capacity (RAM) is sufficient for your model and dataset.
+For demanding tasks like training deep learning models, selecting a GPU-accelerated instance type is highly recommended. [GPUs](https://www.ultralytics.com/glossary/gpu-graphics-processing-unit) can dramatically reduce the time required for model training compared to CPUs. When choosing an instance size, ensure its memory capacity (RAM) is sufficient for your model and dataset.
 
 **Note:** The size of your model and dataset are critical factors. If your ML task requires more memory than the selected instance provides, you'll need to choose a larger instance type to avoid performance issues or errors.
 
 Explore the available GPU instance types on the [EC2 Instance Types page](https://aws.amazon.com/ec2/instance-types/), particularly under the **Accelerated Computing** category.
 
-![AWS EC2 GPU instance type selection](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/choose-instance-type.avif)
+![AWS EC2 GPU instance type selection](https://cdn.ul.run/i/18c087c9f3f112466d803c6394e780b9.avif)
 
 For detailed information on monitoring and optimizing GPU usage, refer to the AWS guide on [GPU Monitoring and Optimization](https://docs.aws.amazon.com/dlami/latest/devguide/tutorial-gpu.html). Compare costs using [On-Demand Pricing](https://aws.amazon.com/ec2/pricing/on-demand/) and explore potential savings with [Spot Instance Pricing](https://aws.amazon.com/ec2/spot/pricing/).
 
 ### Configuring Your Instance
 
-Consider using Amazon EC2 Spot Instances for a more cost-effective approach. Spot Instances allow you to bid on unused EC2 capacity, often at a significant discount compared to On-Demand prices. For tasks that require persistence (saving data even if the Spot Instance is interrupted), choose a **persistent request**. This ensures your storage volume persists.
+Consider using Amazon EC2 Spot Instances for a more cost-effective approach. Spot Instances let you use unused EC2 capacity, often at a significant discount compared to On-Demand prices. For training that must survive an interruption, choose a **persistent request** and set the interruption behavior to **stop** rather than terminate, so the EBS volume and your training outputs are kept and the instance restarts when capacity returns.
 
-![Spot Request Configuration](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/spot-request.avif)
+![Spot Request Configuration](https://cdn.ul.run/i/ef8dca50c53d56c949c91231dec18a69.avif)
 
-Proceed through Steps 4-7 of the instance launch wizard to configure storage, add tags, set up security groups (ensure SSH port 22 is open from your IP), and review your settings before clicking **Launch**. You'll also need to create or select an existing key pair for secure SSH access.
+Proceed through the remaining launch settings to configure storage, add tags, set up security groups (ensure SSH port 22 is open from your IP), and review your settings before clicking **Launch**. You'll also need to create or select an existing key pair for secure SSH access.
 
 ## Step 3: Connect to Your Instance
 
 Once your instance state shows as 'running', select it from the EC2 dashboard. Click the **Connect** button to view connection options. Use the provided SSH command example in your local terminal (like Terminal on macOS/Linux or PuTTY/WSL on Windows) to establish a secure connection. You'll need the private key file (`.pem`) you created or selected during launch.
 
-![AWS EC2 instance SSH connection options](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/connect-to-instance.avif)
+![AWS EC2 instance SSH connection options](https://cdn.ul.run/i/b383e4d320fa959ca05027aa26135f46.avif)
 
 ## Step 4: Running Ultralytics YOLOv5
 
@@ -81,11 +81,10 @@ python val.py --weights yolov5s.pt --data coco128.yaml --img 640
 python detect.py --weights yolov5s.pt --source path/to/your/images_or_videos/ --img 640
 
 # Export the trained model to various formats like ONNX, CoreML, TFLite for deployment
-# See https://docs.ultralytics.com/modes/export/ for more details
 python export.py --weights yolov5s.pt --include onnx coreml tflite --img 640
 ```
 
-Refer to the Ultralytics documentation for detailed guides on [Training](../../modes/train.md), [Validation](../../modes/val.md), [Prediction (Inference)](../../modes/predict.md), and [Exporting](../../modes/export.md).
+See the [Train Custom Data](../tutorials/train-custom-data.md) and [Model Export](../tutorials/model-export.md) tutorials for detailed guides.
 
 ## Optional Extras: Increasing Swap Memory
 
@@ -108,4 +107,22 @@ sudo swapon /swapfile
 free -h
 ```
 
-Congratulations! 🎉 You have successfully set up an AWS Deep Learning instance, installed Ultralytics YOLOv5, and are ready to perform [object detection](https://www.ultralytics.com/glossary/object-detection) tasks. Whether you're experimenting with pretrained models or [training](../../modes/train.md) on your own data, this powerful setup provides a scalable foundation for your [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) projects. Should you encounter any issues, consult the extensive [AWS documentation](https://docs.aws.amazon.com/) and the helpful Ultralytics community resources like the [FAQ](../../help/FAQ.md). Happy detecting!
+You have now set up an AWS Deep Learning instance, installed Ultralytics YOLOv5, and are ready to perform [object detection](https://www.ultralytics.com/glossary/object-detection) tasks. Whether you're experimenting with pretrained models or [training](../../modes/train.md) on your own data, this setup provides a scalable foundation for your [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) projects. If you encounter any issues, consult the [AWS documentation](https://docs.aws.amazon.com/) and the Ultralytics [FAQ](../../help/FAQ.md).
+
+## FAQ
+
+### Which AMI should I choose for YOLOv5?
+
+Pick the latest Ubuntu-based AWS Deep Learning AMI. It ships with NVIDIA drivers, CUDA, and PyTorch preinstalled, so the only setup left is cloning the repository and installing `requirements.txt`.
+
+### Which instance type do I need?
+
+Any GPU instance from the Accelerated Computing family works, for example `g4dn`, `g5`, or `p3` instances. Choose enough GPU memory for your batch size and image size, and use `--batch-size -1` to let YOLOv5 pick the largest batch that fits.
+
+### How do I move datasets and results on and off the instance?
+
+Use `scp` with your `.pem` key for small transfers, or stage data in Amazon S3 and copy it with `aws s3 sync`. Training outputs land in `runs/train/`, and weights are in `runs/train/exp/weights/`.
+
+### What happens to training if my Spot Instance is interrupted?
+
+Use a persistent Spot request with the interruption behavior set to **stop** so the EBS volume is kept, then resume the run from its last checkpoint with `python train.py --resume` once the instance restarts. Copy `last.pt` and `best.pt` to S3 periodically if you cannot afford to lose progress.

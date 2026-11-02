@@ -1,6 +1,5 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
-"""
-Ultralytics neural network modules.
+"""Ultralytics neural network modules.
 
 This module provides access to various neural network components used in Ultralytics models, including convolution
 blocks, attention mechanisms, transformer components, and detection/segmentation heads.
@@ -80,6 +79,7 @@ from .head import (
     OBB,
     OBB26,
     Classify,
+    Depth,
     Detect,
     LRPCHead,
     Pose,
@@ -175,6 +175,7 @@ __all__ = (
     "DWConvTranspose2d",
     "DeformableTransformerDecoder",
     "DeformableTransformerDecoderLayer",
+    "Depth",
     "Detect",
     "Focus",
     "GhostBottleneck",

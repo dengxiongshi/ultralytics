@@ -15,7 +15,7 @@ keywords: COCO-Pose, pose estimation, dataset, keypoints, COCO Keypoints 2017, Y
 
 The [COCO-Pose](https://cocodataset.org/#keypoints-2017) dataset adapts COCO (Common Objects in Context) for [pose estimation](../../tasks/pose.md): 58,945 images from COCO Keypoints 2017, annotated with 156,165 people using a 17-keypoint schema. It is the standard set for training and benchmarking keypoint models such as [Ultralytics YOLO26](../../models/yolo26.md), and the 8-image [COCO8-Pose](coco8-pose.md) subset mirrors its format for quick sanity checks.
 
-![COCO pose estimation with human keypoints](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/pose-sample-image.avif)
+![COCO pose estimation with human keypoints](https://cdn.ul.run/i/95627d4a51cd7ee85d8aee0655b92621.avif)
 
 ## COCO-Pose Pretrained Models
 
@@ -25,7 +25,7 @@ The [COCO-Pose](https://cocodataset.org/#keypoints-2017) dataset adapts COCO (Co
 
 - COCO-Pose builds upon the [COCO Keypoints 2017](http://presentations.cocodataset.org/COCO17-Keypoints-Overview.pdf) challenge, which labels 1,710,498 individual keypoints across 156,165 annotated people.
 - Each person annotation uses 17 keypoint types — nose, eyes, ears, shoulders, elbows, wrists, hips, knees, and ankles — stored as `(x, y, visibility)` triplets.
-- Like COCO, it provides standardized evaluation metrics, including Object Keypoint Similarity (OKS) for pose estimation tasks, making it suitable for comparing model performance.
+- Like COCO, it provides standardized evaluation metrics, including [Object Keypoint Similarity (OKS)](https://academy.ultralytics.com/courses/beyond-detection/custom-keypoints-and-oks) for pose estimation tasks, making it suitable for comparing model performance.
 - **Download size**: ~20.2 GB on first use (`train2017.zip` + `val2017.zip` + labels). The 7 GB `test2017.zip` is not fetched automatically, since those images have withheld ground truth and are only needed for a [test-dev2017 submission](https://codalab.lisn.upsaclay.fr/competitions/7403).
 
 ## Dataset Structure
@@ -36,11 +36,11 @@ For training and validation, COCO-Pose includes only COCO 2017 images with keypo
 2. **Val2017**: This subset has 2,346 images used for validation purposes during model training.
 3. **Test-dev2017**: A 20,288-image subset of the full 40,670-image test2017 set with withheld ground truth. The dataset YAML links this split to the [COCO test-dev keypoints evaluation server](https://codalab.lisn.upsaclay.fr/competitions/7403).
 
-Training at this scale is where [Ultralytics Platform](https://platform.ultralytics.com/) helps most — it manages the compute so you can launch and monitor runs without provisioning your own GPUs.
+Training at this scale is where [Ultralytics Platform](https://platform.ultralytics.com/ultralytics/datasets/coco2017-pose) helps most — it manages the compute so you can launch and monitor runs without provisioning your own GPUs.
 
 ## Applications
 
-The COCO-Pose dataset is specifically used for training and evaluating [deep learning](https://www.ultralytics.com/glossary/deep-learning-dl) models on keypoint detection and [pose estimation](../../tasks/pose.md). The dataset's large number of annotated images and standardized evaluation metrics make it an essential resource for [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) researchers and practitioners working on human pose.
+The COCO-Pose dataset is specifically used for training and evaluating [deep learning](https://www.ultralytics.com/glossary/deep-learning-dl) models on [keypoint](https://www.ultralytics.com/glossary/keypoints) detection and pose estimation. The dataset's large number of annotated images and standardized evaluation metrics make it an essential resource for [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) researchers and practitioners working on human pose.
 
 ## Dataset YAML
 
@@ -54,7 +54,7 @@ A YAML file is used to define the dataset configuration. It contains information
 
 ## Usage
 
-To train a YOLO26n-pose model on the COCO-Pose dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 640, you can use the following code snippets. For a comprehensive list of available arguments, refer to the model [Training](../../modes/train.md) page.
+To [train](../../modes/train.md) a [YOLO26n-pose](https://platform.ultralytics.com/ultralytics/yolo26/yolo26n-pose) model on the COCO-Pose dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 640, you can use the following code snippets.
 
 !!! example "Train Example"
 
@@ -81,7 +81,7 @@ To train a YOLO26n-pose model on the COCO-Pose dataset for 100 [epochs](https://
 
 The COCO-Pose dataset contains a diverse set of images with human figures annotated with keypoints. Here are some examples of images from the dataset, along with their corresponding annotations:
 
-![COCO pose estimation dataset mosaic training batch](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/mosaiced-training-batch-6.avif)
+![COCO pose estimation dataset mosaic training batch](https://cdn.ul.run/i/3f75a1133895eb6192751135f58001be.avif)
 
 - **Mosaiced Image**: This image demonstrates a training batch composed of mosaiced dataset images. Mosaicing is a technique used during training that combines multiple images into a single image to increase the variety of objects and scenes within each training batch. This helps improve the model's ability to generalize to different object sizes, aspect ratios, and contexts.
 
@@ -91,7 +91,7 @@ The example showcases the variety and complexity of the images in the COCO-Pose 
 
 If you use the COCO-Pose dataset in your research or development work, please cite the following paper:
 
-!!! quote ""
+!!! quote "Citation"
 
     === "BibTeX"
 
@@ -120,7 +120,7 @@ Load `yolo26n-pose.pt` and call `model.train(data="coco-pose.yaml", epochs=100, 
 
 ### What are the different metrics provided by the COCO-Pose dataset for evaluating model performance?
 
-The COCO-Pose dataset provides several standardized evaluation metrics for pose estimation tasks, similar to the original COCO dataset. Key metrics include the Object Keypoint Similarity (OKS), which evaluates the [accuracy](https://www.ultralytics.com/glossary/accuracy) of predicted keypoints against ground truth annotations. These metrics allow for thorough performance comparisons between different models. For instance, the COCO-Pose pretrained models such as YOLO26n-pose, YOLO26s-pose, and others have specific performance metrics listed in the documentation, like mAP<sup>pose</sup>50-95 and mAP<sup>pose</sup>50.
+The COCO-Pose dataset provides several standardized evaluation metrics for pose estimation tasks, similar to the original COCO dataset. Key metrics include the Object Keypoint Similarity (OKS), which evaluates the [accuracy](https://www.ultralytics.com/glossary/accuracy) of predicted keypoints against ground truth annotations. These metrics allow for thorough performance comparisons between different models. For instance, the COCO-Pose pretrained models such as YOLO26n-pose, YOLO26s-pose, and others have specific performance metrics listed in the documentation, like mAP<sup>pose</sup><sub>50-95</sub> and mAP<sup>pose</sup><sub>50</sub>.
 
 ### How is the dataset structured and split for the COCO-Pose dataset?
 

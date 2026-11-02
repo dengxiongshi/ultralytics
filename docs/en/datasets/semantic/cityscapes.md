@@ -52,7 +52,7 @@ The semantic masks are single-channel PNG files. The original Cityscapes label I
 
 Cityscapes is widely used for training and evaluating [deep learning](https://www.ultralytics.com/glossary/deep-learning-dl) models in semantic segmentation, particularly for [autonomous driving](https://www.ultralytics.com/glossary/autonomous-vehicles), advanced driver-assistance systems (ADAS), and urban robotics.
 
-Its high-resolution images and detailed annotations also make it valuable for research on real-time scene parsing, lane and obstacle understanding, and any task that requires dense pixel-level understanding of complex urban environments. Pretrained YOLO26 semantic segmentation models reach up to 83.6 mIoU on the Cityscapes validation set — see the [semantic segmentation models](../../tasks/semantic.md) page for the full benchmark table. Cityscapes annotations are also available on [Ultralytics Platform](https://platform.ultralytics.com/ultralytics/datasets/cityscapes) for browsing and dataset management.
+Its high-resolution images and detailed annotations also make it valuable for research on real-time scene parsing, lane and obstacle understanding, and any task that requires dense pixel-level understanding of complex urban environments. Pretrained YOLO26 semantic segmentation models reach up to 83.6 mIoU on the Cityscapes validation set — see the [semantic segmentation models](../../tasks/semantic.md) page for the full benchmark table. You can organize, visualize, and manage Cityscapes data throughout the model development workflow with [Ultralytics Platform](https://platform.ultralytics.com).
 
 ## Dataset YAML
 
@@ -66,7 +66,7 @@ A dataset YAML file defines the Cityscapes paths, classes, mask directory, and l
 
 ## Usage
 
-To train a YOLO26n-sem model on the Cityscapes dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 1024, you can use the following code snippets. For a comprehensive list of available arguments, refer to the model [Training](../../modes/train.md) page.
+To [train](../../modes/train.md) a [YOLO26n-sem](https://platform.ultralytics.com/ultralytics/yolo26/yolo26n-sem) model on the Cityscapes dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 1024, you can use the following code snippets.
 
 !!! example "Train Example"
 
@@ -95,7 +95,7 @@ Cityscapes is released under a [custom non-commercial license](https://www.citys
 
 If you use the Cityscapes dataset in your research or development work, please cite the following paper:
 
-!!! quote ""
+!!! quote "Citation"
 
     === "BibTeX"
 
@@ -108,7 +108,7 @@ If you use the Cityscapes dataset in your research or development work, please c
         }
         ```
 
-We would like to acknowledge the Cityscapes team for creating and maintaining this valuable resource for the autonomous driving and computer vision communities. For more information about the Cityscapes dataset and its creators, visit the [Cityscapes dataset website](https://www.cityscapes-dataset.com/).
+We acknowledge the Cityscapes team for creating and maintaining this valuable resource for the autonomous driving and computer vision communities.
 
 ## FAQ
 

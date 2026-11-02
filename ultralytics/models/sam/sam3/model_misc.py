@@ -43,7 +43,7 @@ class DotProductScoring(torch.nn.Module):
         is_valid = (~prompt_mask).to(prompt.dtype).permute(1, 0)[..., None]
         # num_valid has shape (bs, 1)
         num_valid = torch.clamp(torch.sum(is_valid, dim=0), min=1.0)
-        # mean pool over all the valid tokens -- pooled_prompt has shape (bs, proj_dim)
+        # mean pool over all the valid tokens -- pooled_prompt has shape (bs, d_model)
         pooled_prompt = (prompt * is_valid).sum(dim=0) / num_valid
         return pooled_prompt
 
@@ -123,13 +123,12 @@ class TransformerWrapper(nn.Module):
     def _reset_parameters(self):
         """Initialize the parameters of the model."""
         for n, p in self.named_parameters():
-            if p.dim() > 1:
-                if "box_embed" not in n and "query_embed" not in n and "reference_points" not in n:
-                    nn.init.xavier_uniform_(p)
+            if p.dim() > 1 and "box_embed" not in n and "query_embed" not in n and "reference_points" not in n:
+                nn.init.xavier_uniform_(p)
 
 
 def get_valid_ratio(mask):
-    """Compute the valid ratio of height and width from the mask."""
+    """Compute the valid (unpadded) ratios of width and height from a (B, H, W) padding mask, returned as (B, 2)."""
     _, H, W = mask.shape
     valid_H = torch.sum(~mask[:, :, 0], 1)
     valid_W = torch.sum(~mask[:, 0, :], 1)

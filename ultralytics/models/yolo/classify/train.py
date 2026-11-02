@@ -20,13 +20,13 @@ from ultralytics.utils.torch_utils import is_parallel, torch_distributed_zero_fi
 class ClassificationTrainer(BaseTrainer):
     """A trainer class extending BaseTrainer for training image classification models.
 
-    This trainer handles the training process for image classification tasks, supporting both YOLO classification models
-    and torchvision models with comprehensive dataset handling and validation.
+    This trainer handles image classification with YOLO models and TorchVision backbones configured in model YAMLs,
+    including dataset handling and validation.
 
     Attributes:
         model (ClassificationModel): The classification model to be trained.
         data (dict[str, Any]): Dictionary containing dataset information including class names and number of classes.
-        loss_names (list[str]): Names of the loss functions used during training.
+        loss_names (tuple): Names of the loss items, derived from the loss dict returned by the criterion.
         validator (ClassificationValidator): Validator instance for model evaluation.
 
     Methods:
@@ -38,8 +38,6 @@ class ClassificationTrainer(BaseTrainer):
         preprocess_batch: Preprocess a batch of images and classes.
         progress_string: Return a formatted string showing training progress.
         get_validator: Return an instance of ClassificationValidator.
-        label_loss_items: Return a loss dict with labeled training loss items.
-        final_eval: Evaluate trained model and save validation results.
         plot_training_samples: Plot training samples with their annotations.
 
     Examples:
@@ -61,7 +59,8 @@ class ClassificationTrainer(BaseTrainer):
         if overrides is None:
             overrides = {}
         overrides["task"] = "classify"
-        if overrides.get("imgsz") is None:
+        overrides["multi_scale"] = 0.0  # classification batches are never rescaled
+        if overrides.get("imgsz") is None and not overrides.get("resume"):
             overrides["imgsz"] = 224
         super().__init__(cfg, overrides, _callbacks)
 
@@ -69,12 +68,12 @@ class ClassificationTrainer(BaseTrainer):
         """Set the YOLO model's class names from the loaded dataset."""
         self.model.names = self.data["names"]
 
-    def get_model(self, cfg=None, weights=None, verbose: bool = True):
+    def get_model(self, cfg: str | dict | None = None, weights: torch.nn.Module | None = None, verbose: bool = True):
         """Return a modified PyTorch model configured for training YOLO classification.
 
         Args:
-            cfg (Any, optional): Model configuration.
-            weights (Any, optional): Pre-trained model weights.
+            cfg (str | dict, optional): Model configuration file path or dictionary.
+            weights (torch.nn.Module, optional): Pretrained model whose weights are loaded into the new model.
             verbose (bool, optional): Whether to display model information.
 
         Returns:
@@ -85,7 +84,7 @@ class ClassificationTrainer(BaseTrainer):
             model.load(weights)
 
         for m in model.modules():
-            if self.args.pretrained is False and hasattr(m, "reset_parameters"):
+            if self.args.pretrained is False and not self.resume and hasattr(m, "reset_parameters"):
                 m.reset_parameters()
             if isinstance(m, torch.nn.Dropout) and self.args.dropout:
                 m.p = self.args.dropout  # set dropout
@@ -176,6 +175,7 @@ class ClassificationTrainer(BaseTrainer):
             )
 
         # Filter out samples with class indices >= nc (prevents CUDA assertion errors)
+        drop_last = self.args.compile and mode == "train"
         nc = self.data.get("nc", 0)
         if not getattr(self.args, "multi_label", False) and hasattr(dataset, "base"):
             dataset_nc = len(dataset.base.classes)
@@ -193,7 +193,7 @@ class ClassificationTrainer(BaseTrainer):
                         f"All {original_count} samples in '{mode}' split filtered out: every sample had class index >= "
                         f"model nc={nc}. Reset the model's class count or align dataset class indices."
                     )
-        loader = build_dataloader(dataset, batch_size, self.args.workers, rank=rank, drop_last=self.args.compile)
+        loader = build_dataloader(dataset, batch_size, self.args.workers, rank=rank, drop_last=drop_last, device=self.device)
         # Attach inference transforms
         if mode != "train":
             if is_parallel(self.model):
@@ -204,8 +204,8 @@ class ClassificationTrainer(BaseTrainer):
 
     def preprocess_batch(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         """Preprocess a batch of images and classes."""
-        batch["img"] = batch["img"].to(self.device, non_blocking=self.device.type == "cuda")
-        batch["cls"] = batch["cls"].to(self.device, non_blocking=self.device.type == "cuda")
+        batch["img"] = batch["img"].to(self.device, non_blocking=self.device.type not in {"cpu", "mps"})
+        batch["cls"] = batch["cls"].to(self.device, non_blocking=self.device.type not in {"cpu", "mps"})
         return batch
 
     def progress_string(self) -> str:
@@ -220,26 +220,9 @@ class ClassificationTrainer(BaseTrainer):
 
     def get_validator(self):
         """Return an instance of ClassificationValidator for validation."""
-        self.loss_names = ["loss"]
         return yolo.classify.ClassificationValidator(
             self.test_loader, self.save_dir, args=copy(self.args), _callbacks=self.callbacks
         )
-
-    def label_loss_items(self, loss_items: torch.Tensor | None = None, prefix: str = "train"):
-        """Return a loss dict with labeled training loss items tensor.
-
-        Args:
-            loss_items (torch.Tensor, optional): Loss tensor items.
-            prefix (str, optional): Prefix to prepend to loss names.
-
-        Returns:
-            (dict | list): Dictionary of labeled loss items if loss_items is provided, otherwise list of keys.
-        """
-        keys = [f"{prefix}/{x}" for x in self.loss_names]
-        if loss_items is None:
-            return keys
-        loss_items = [round(float(loss_items), 5)]
-        return dict(zip(keys, loss_items))
 
     def plot_training_samples(self, batch: dict[str, torch.Tensor], ni: int):
         """Plot training samples with their annotations.

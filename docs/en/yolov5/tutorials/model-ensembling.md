@@ -1,12 +1,12 @@
 ---
 comments: true
-description: Learn how to use YOLOv5 model ensembling during testing and inference to enhance mAP and Recall for more accurate predictions.
+description: Ensemble multiple Ultralytics YOLOv5 checkpoints at validation and inference time by listing them after --weights to raise mAP and recall.
 keywords: YOLOv5, model ensembling, testing, inference, mAP, Recall, Ultralytics, object detection, PyTorch
 ---
 
 # YOLOv5 Model Ensembling
 
-📚 This guide explains how to use Ultralytics YOLOv5 🚀 **model ensembling** during testing and inference for improved mAP and [Recall](https://www.ultralytics.com/glossary/recall).
+This guide explains how to use Ultralytics [YOLOv5](../../models/yolov5.md) **[model ensembling](https://www.ultralytics.com/glossary/model-ensemble)** during testing and inference for improved [mAP](https://www.ultralytics.com/glossary/mean-average-precision-map) and [recall](https://www.ultralytics.com/glossary/recall).
 
 From [ensemble learning](https://en.wikipedia.org/wiki/Ensemble_learning):
 
@@ -14,7 +14,7 @@ From [ensemble learning](https://en.wikipedia.org/wiki/Ensemble_learning):
 
 ## Before You Start
 
-Clone repo and install [requirements.txt](https://github.com/ultralytics/yolov5/blob/master/requirements.txt) in a [**Python>=3.8.0**](https://www.python.org/) environment, including [**PyTorch>=1.8**](https://pytorch.org/get-started/locally/). [Models](https://github.com/ultralytics/yolov5/tree/master/models) and [datasets](https://github.com/ultralytics/yolov5/tree/master/data) download automatically from the latest YOLOv5 [release](https://github.com/ultralytics/yolov5/releases).
+Clone the repo and install [requirements.txt](https://github.com/ultralytics/yolov5/blob/master/requirements.txt) in a [**Python>=3.8.0**](https://www.python.org/) environment, including [**PyTorch>=1.8**](https://pytorch.org/get-started/locally/). [Models](https://github.com/ultralytics/yolov5/tree/master/models) and [datasets](https://github.com/ultralytics/yolov5/tree/master/data) download automatically from the latest YOLOv5 [release](https://github.com/ultralytics/yolov5/releases).
 
 ```bash
 git clone https://github.com/ultralytics/yolov5 # clone
@@ -24,7 +24,7 @@ pip install -r requirements.txt # install
 
 ## Test Normally
 
-Before ensembling, establish the baseline performance of a single model. This command tests YOLOv5x on COCO val2017 at image size 640 pixels. `yolov5x.pt` is the largest and most accurate model available. Other options are `yolov5s.pt`, `yolov5m.pt` and `yolov5l.pt`, or your own checkpoint from training a custom dataset `./weights/best.pt`. For details on all available models, see the [pretrained checkpoints table](../../models/yolov5.md).
+Before ensembling, establish the baseline performance of a single model. This command tests YOLOv5x on COCO val2017 at image size 640 pixels. `yolov5x.pt` is the largest and most accurate P5 model. Other options are the smaller [pretrained checkpoints](https://github.com/ultralytics/yolov5#pretrained-checkpoints) `yolov5n.pt`, `yolov5s.pt`, `yolov5m.pt` and `yolov5l.pt`, or your own checkpoint from training a custom dataset, e.g. `runs/train/exp/weights/best.pt`.
 
 ```bash
 python val.py --weights yolov5x.pt --data coco.yaml --img 640 --half
@@ -41,7 +41,7 @@ Model Summary: 476 layers, 87730285 parameters, 0 gradients
 
 val: Scanning '../datasets/coco/val2017' images and labels...4952 found, 48 missing, 0 empty, 0 corrupted: 100% 5000/5000 [00:01<00:00, 2846.03it/s]
 val: New cache created: ../datasets/coco/val2017.cache
-               Class     Images     Labels          P          R     mAP@.5 mAP@.5:.95: 100% 157/157 [02:30<00:00,  1.05it/s]
+               Class     Images  Instances          P          R      mAP50   mAP50-95: 100% 157/157 [02:30<00:00,  1.05it/s]
                  all       5000      36335      0.746      0.626       0.68       0.49
 Speed: 0.1ms pre-process, 22.4ms inference, 1.4ms NMS per image at shape (32, 3, 640, 640)  # <--- baseline speed
 
@@ -63,7 +63,7 @@ Evaluating pycocotools mAP... saving runs/val/exp/yolov5x_predictions.json...
 
 ## Ensemble Test
 
-Multiple pretrained models can be ensembled together at test and inference time by simply appending extra models to the `--weights` argument in any existing val.py or detect.py command. This example tests an ensemble of 2 models together:
+Multiple pretrained models can be ensembled together at test and inference time by appending extra models to the `--weights` argument in any existing `val.py` or `detect.py` command. This example tests an ensemble of 2 models together:
 
 - YOLOv5x
 - YOLOv5l6
@@ -72,7 +72,7 @@ Multiple pretrained models can be ensembled together at test and inference time 
 python val.py --weights yolov5x.pt yolov5l6.pt --data coco.yaml --img 640 --half
 ```
 
-You can list as many checkpoints as you would like, including custom weights such as `runs/train/exp-5/weights/best.pt`. YOLOv5 will automatically run each model, align the predictions on a per-image basis, and average the outputs before performing NMS.
+You can list as many checkpoints as you would like, including custom weights such as `runs/train/exp5/weights/best.pt`. YOLOv5 will automatically run each model and concatenate their predictions on a per-image basis before performing [NMS](https://www.ultralytics.com/glossary/non-maximum-suppression-nms).
 
 Output:
 
@@ -87,11 +87,11 @@ Model Summary: 501 layers, 77218620 parameters, 0 gradients  # Model 2
 Ensemble created with ['yolov5x.pt', 'yolov5l6.pt']  # Ensemble notice
 
 val: Scanning '../datasets/coco/val2017.cache' images and labels... 4952 found, 48 missing, 0 empty, 0 corrupted: 100% 5000/5000 [00:00<00:00, 49695545.02it/s]
-               Class     Images     Labels          P          R     mAP@.5 mAP@.5:.95: 100% 157/157 [03:58<00:00,  1.52s/it]
+               Class     Images  Instances          P          R      mAP50   mAP50-95: 100% 157/157 [03:58<00:00,  1.52s/it]
                  all       5000      36335      0.747      0.637      0.692      0.502
 Speed: 0.1ms pre-process, 39.5ms inference, 2.0ms NMS per image at shape (32, 3, 640, 640)  # <--- ensemble speed
 
-Evaluating pycocotools mAP... saving runs/val/exp-3/yolov5x_predictions.json...
+Evaluating pycocotools mAP... saving runs/val/exp3/yolov5x_predictions.json...
 ...
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.515  # <--- ensemble mAP
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.699
@@ -128,18 +128,18 @@ Ensemble created with ['yolov5x.pt', 'yolov5l6.pt']
 
 image 1/2 /content/yolov5/data/images/bus.jpg: 640x512 4 persons, 1 bus, 1 tie, Done. (0.063s)
 image 2/2 /content/yolov5/data/images/zidane.jpg: 384x640 3 persons, 2 ties, Done. (0.056s)
-Results saved to runs/detect/exp-2
+Results saved to runs/detect/exp2
 Done. (0.223s)
 ```
 
-<img src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/yolo-inference-result.avif" width="500" alt="YOLO inference result">
+<img src="https://cdn.ul.run/i/abbd31bf5a19d431758c48ac4a6aef72.avif" width="500" alt="YOLOv5 ensemble detection results on a sample image">
 
 ## Benefits of Model Ensembling
 
 Model ensembling with YOLOv5 offers several advantages:
 
 1. **Improved Accuracy**: As demonstrated in the examples above, ensembling multiple models increases mAP from 0.504 to 0.515 and mAR from 0.681 to 0.689.
-2. **Better Generalization**: Combining diverse models helps reduce overfitting and improves performance on varied data.
+2. **Better Generalization**: Combining diverse models helps reduce [overfitting](https://www.ultralytics.com/glossary/overfitting) and improves performance on varied data.
 3. **Enhanced Robustness**: Ensembles are typically more robust to noise and outliers in the data.
 4. **Complementary Strengths**: Different models may excel at detecting different types of objects or in different environmental conditions.
 
@@ -158,7 +158,7 @@ For real-time applications with strict latency requirements, single model infere
 
 ## Supported Environments
 
-Ultralytics provides a range of ready-to-use environments, each pre-installed with essential dependencies such as [CUDA](https://developer.nvidia.com/cuda), [CUDNN](https://developer.nvidia.com/cudnn), [Python](https://www.python.org/), and [PyTorch](https://pytorch.org/), to kickstart your projects.
+Ultralytics provides a range of ready-to-use environments, each pre-installed with essential dependencies such as [CUDA](https://developer.nvidia.com/cuda), [cuDNN](https://developer.nvidia.com/cuda/cuda-x-libraries/cudnn), [Python](https://www.python.org/), and [PyTorch](https://pytorch.org/), to kickstart your projects.
 
 - **Free GPU Notebooks**: <a href="https://bit.ly/yolov5-paperspace-notebook"><img src="https://assets.paperspace.io/img/gradient-badge.svg" alt="Run on Gradient"></a> <a href="https://colab.research.google.com/github/ultralytics/yolov5/blob/master/tutorial.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a> <a href="https://www.kaggle.com/models/ultralytics/yolov5"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" alt="Open In Kaggle"></a>
 - **Google Cloud**: [GCP Quickstart Guide](../environments/google-cloud-quickstart-tutorial.md)
@@ -171,3 +171,21 @@ Ultralytics provides a range of ready-to-use environments, each pre-installed wi
 <a href="https://github.com/ultralytics/yolov5/actions/workflows/ci-testing.yml"><img src="https://github.com/ultralytics/yolov5/actions/workflows/ci-testing.yml/badge.svg" alt="YOLOv5 CI"></a>
 
 This badge indicates that all [YOLOv5 GitHub Actions](https://github.com/ultralytics/yolov5/actions) Continuous Integration (CI) tests are successfully passing. These CI tests rigorously check the functionality and performance of YOLOv5 across various key aspects: [training](https://github.com/ultralytics/yolov5/blob/master/train.py), [validation](https://github.com/ultralytics/yolov5/blob/master/val.py), [inference](https://github.com/ultralytics/yolov5/blob/master/detect.py), [export](https://github.com/ultralytics/yolov5/blob/master/export.py), and [benchmarks](https://github.com/ultralytics/yolov5/blob/master/benchmarks.py). They ensure consistent and reliable operation on macOS, Windows, and Ubuntu, with tests conducted every 24 hours and upon each new commit.
+
+## FAQ
+
+### How many models can I ensemble?
+
+Any number. List every checkpoint after `--weights`, for example `--weights yolov5x.pt yolov5l6.pt runs/train/exp/weights/best.pt`. Inference time grows roughly in proportion to the number of models.
+
+### Do the models need the same classes?
+
+Yes. Predictions are concatenated before NMS, so every model must be trained on the same class list in the same order. Input sizes and architectures can differ.
+
+### Can I combine ensembling with test-time augmentation?
+
+Yes. Add `--augment` to the same `val.py` or `detect.py` command to apply [TTA](test-time-augmentation.md) to every model in the ensemble.
+
+### Does ensembling work with exported models?
+
+Ensembling is handled by the PyTorch `Ensemble` module in `models/experimental.py`, so it applies to `.pt` checkpoints only. Export each model separately if you need ONNX or TensorRT files.

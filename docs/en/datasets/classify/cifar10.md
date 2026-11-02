@@ -15,6 +15,8 @@ keywords: CIFAR-10, dataset, image classification, object recognition, machine l
 
 The [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) (Canadian Institute For Advanced Research) dataset is a classic [image classification](https://www.ultralytics.com/glossary/image-classification) benchmark of 60,000 32x32 color images evenly split across 10 classes — airplane, automobile, bird, cat, deer, dog, frog, horse, ship, and truck. It ships with a predefined split of 50,000 training and 10,000 test images (6,000 per class), making it a lightweight, well-balanced starting point for training and benchmarking classification models. For a more fine-grained challenge, see the related [CIFAR-100](cifar100.md) dataset.
 
+Explore [CIFAR-10 on Ultralytics Platform](https://platform.ultralytics.com/ultralytics/datasets/cifar10) to preview samples, inspect dataset statistics, and clone it for training.
+
 <p align="center">
   <br>
   <iframe loading="lazy" width="720" height="405" src="https://www.youtube.com/embed/fLBbyhPbWzY"
@@ -23,7 +25,7 @@ The [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) (Canadian Institute 
     allowfullscreen>
   </iframe>
   <br>
-  <strong>Watch:</strong> How to Train an <a href="https://www.ultralytics.com/glossary/image-classification">Image Classification</a> Model with CIFAR-10 Dataset using Ultralytics YOLO
+  <strong>Watch:</strong> How to Train an Image Classification Model with CIFAR-10 Dataset using Ultralytics YOLO
 </p>
 
 ## Key Features
@@ -32,7 +34,7 @@ The [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) (Canadian Institute 
 - Each class holds exactly 6,000 images — 5,000 for training and 1,000 for testing — so the dataset is perfectly balanced.
 - The 10 classes are airplane, automobile, bird, cat, deer, dog, frog, horse, ship, and truck.
 - The dataset ships with a predefined train/test split, so no manual or automatic splitting is required.
-- CIFAR-10 is a standard benchmark for [image classification](https://www.ultralytics.com/glossary/image-classification) and object recognition research.
+- CIFAR-10 is a standard benchmark for image classification and object recognition research.
 
 ## Dataset Structure
 
@@ -49,11 +51,11 @@ CIFAR-10 ships with an official, predefined split, so no automatic or manual par
 
 ## Applications
 
-CIFAR-10 is widely used to train and evaluate [image classification](https://www.ultralytics.com/glossary/image-classification) models, from classic [Convolutional Neural Networks](https://www.ultralytics.com/glossary/convolutional-neural-network-cnn) (CNNs) and [Support Vector Machines](https://www.ultralytics.com/glossary/support-vector-machine-svm) (SVMs) to modern deep architectures. Its small image size and balanced classes make it ideal for rapid experimentation, benchmarking new algorithms, and teaching [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) fundamentals.
+CIFAR-10 is widely used to train and evaluate image classification models, from classic [Convolutional Neural Networks](https://www.ultralytics.com/glossary/convolutional-neural-network-cnn) (CNNs) and [Support Vector Machines](https://www.ultralytics.com/glossary/support-vector-machine-svm) (SVMs) to modern deep architectures. Its small image size and balanced classes make it ideal for rapid experimentation, benchmarking new algorithms, and teaching [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) fundamentals.
 
 ## Usage
 
-Train a YOLO model on CIFAR-10 for 100 [epochs](https://www.ultralytics.com/glossary/epoch) at an image size of 32. For the full list of available arguments, see the [Training](../../modes/train.md) page and the [image classification](../../tasks/classify.md) task guide.
+[Train](../../modes/train.md) a [YOLO26n-cls](https://platform.ultralytics.com/ultralytics/yolo26/yolo26n-cls) model on CIFAR-10 for 100 [epochs](https://www.ultralytics.com/glossary/epoch) at an image size of 32.
 
 !!! example "Train Example"
 
@@ -78,9 +80,9 @@ Train a YOLO model on CIFAR-10 for 100 [epochs](https://www.ultralytics.com/glos
 
 ## Sample Images and Annotations
 
-The CIFAR-10 dataset contains color images of various objects, providing a well-structured dataset for [image classification](https://www.ultralytics.com/glossary/image-classification) tasks. Here are some examples of images from the dataset:
+The CIFAR-10 dataset contains color images of various objects, providing a well-structured dataset for image classification tasks. Here are some examples of images from the dataset:
 
-![CIFAR-10 image classification dataset samples](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/cifar10-sample-image.avif)
+![CIFAR-10 image classification dataset samples](https://cdn.ul.run/i/faa2d103773598062397f4347c5fa0fc.avif)
 
 The samples show the diversity of the objects in the CIFAR-10 dataset, underlining the value of a varied dataset for training robust image classification models.
 
@@ -88,7 +90,7 @@ The samples show the diversity of the objects in the CIFAR-10 dataset, underlini
 
 If you use the CIFAR-10 dataset in your research or development work, please cite the following paper:
 
-!!! quote ""
+!!! quote "Citation"
 
     === "BibTeX"
 
@@ -101,13 +103,13 @@ If you use the CIFAR-10 dataset in your research or development work, please cit
         }
         ```
 
-We would like to acknowledge Alex Krizhevsky for creating and maintaining the CIFAR-10 dataset as a valuable resource for the [machine learning](https://www.ultralytics.com/glossary/machine-learning-ml) and [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) research community. For more information about the CIFAR-10 dataset and its creator, visit the [CIFAR-10 dataset website](https://cave.cs.toronto.edu/kriz/cifar.html).
+We would like to acknowledge Alex Krizhevsky for creating and maintaining the CIFAR-10 dataset as a valuable resource for the [machine learning](https://www.ultralytics.com/glossary/machine-learning-ml) and computer vision research community.
 
 ## FAQ
 
 ### What is the CIFAR-10 dataset used for in machine learning?
 
-The [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset is widely used to train and benchmark [image classification](https://www.ultralytics.com/glossary/image-classification) and object recognition models. It contains 60,000 32x32 color images evenly spread across 10 classes, and its small size and balanced classes make it a fast, reliable benchmark for algorithms such as Convolutional [Neural Networks](https://www.ultralytics.com/glossary/neural-network-nn) (CNNs) and Support Vector Machines (SVMs).
+The [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset is widely used to train and benchmark [image classification](https://www.ultralytics.com/glossary/image-classification) and object recognition models. It contains 60,000 32x32 color images evenly spread across 10 classes, and its small size and balanced classes make it a fast, reliable benchmark for algorithms such as Convolutional Neural Networks (CNNs) and Support Vector Machines (SVMs).
 
 ### How can I train an Ultralytics YOLO model on the CIFAR-10 dataset?
 

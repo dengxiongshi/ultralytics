@@ -1,7 +1,7 @@
 ---
 title: YOLO26 Training Logging with Comet ML
 comments: true
-description: Learn to simplify the logging of YOLO26 training with Comet. This guide covers installation, setup, real-time insights, and custom logging.
+description: Log Ultralytics YOLO26 training to Comet, covering installation, API key setup, automatic metrics and checkpoints, custom logging variables, and offline mode.
 keywords: YOLO26, Comet, Comet ML, logging, machine learning, training, model checkpoints, metrics, installation, configuration, real-time insights, custom logging
 ---
 
@@ -20,7 +20,7 @@ Logging key training details such as parameters, metrics, image predictions, and
   <strong>Watch:</strong> How to Use Comet for Ultralytics YOLO Model Training Logs and Metrics 🚀
 </p>
 
-[Ultralytics YOLO26](https://www.ultralytics.com/) seamlessly integrates with Comet (formerly Comet ML), efficiently capturing and optimizing every aspect of your YOLO26 [object detection](https://www.ultralytics.com/glossary/object-detection) model's training process. In this guide, we'll cover the installation process, Comet setup, real-time insights, custom logging, and offline usage, ensuring that your YOLO26 training is thoroughly documented and fine-tuned for outstanding results.
+[Ultralytics YOLO26](../models/yolo26.md) integrates with Comet (formerly Comet ML) to capture the training process of your YOLO26 [object detection](https://www.ultralytics.com/glossary/object-detection) models. This guide covers installation, Comet setup, real-time insights, custom logging, and offline usage, so that your YOLO26 training runs are documented and reproducible.
 
 ## Comet
 
@@ -28,11 +28,11 @@ Logging key training details such as parameters, metrics, image predictions, and
   <img width="640" src="https://www.comet.com/docs/v2/img/landing/home-hero.svg" alt="Comet ML experiment tracking dashboard">
 </p>
 
-[Comet](https://www.comet.com/site/) is a platform for tracking, comparing, explaining, and optimizing machine learning models and experiments. It allows you to log metrics, parameters, media, and more during your model training and monitor your experiments through an aesthetically pleasing web interface. Comet helps data scientists iterate more rapidly, enhances transparency and reproducibility, and aids in the development of production models.
+[Comet](https://www.comet.com/site/) is a platform for tracking, comparing, explaining, and optimizing machine learning models and experiments. It allows you to log metrics, parameters, media, and more during your model training and monitor your experiments through a web interface. Comet helps data scientists iterate more rapidly, enhances transparency and reproducibility, and aids in the development of production models.
 
 ## Harnessing the Power of YOLO26 and Comet
 
-By combining Ultralytics YOLO26 with Comet, you unlock a range of benefits. These include simplified experiment management, real-time insights for quick adjustments, flexible and tailored logging options, and the ability to log experiments offline when internet access is limited. This integration empowers you to make data-driven decisions, analyze performance metrics, and achieve exceptional results.
+Combining Ultralytics YOLO26 with Comet offers several benefits, including simplified [experiment tracking](https://www.ultralytics.com/glossary/experiment-tracking), real-time insights for quick adjustments, flexible and tailored logging options, and the ability to log experiments offline when internet access is limited. This integration helps you make data-driven decisions and analyze performance metrics.
 
 ## Installation
 
@@ -43,8 +43,8 @@ To install the required packages, run:
     === "CLI"
 
         ```bash
-        # Install the required packages for YOLO26 and Comet
-        pip install ultralytics comet_ml torch torchvision
+        # Install YOLO26 and Comet
+        pip install ultralytics comet_ml
         ```
 
 ## Configuring Comet
@@ -60,7 +60,7 @@ After installing the required packages, you'll need to sign up, get a [Comet API
         export COMET_API_KEY=YOUR_API_KEY
         ```
 
-Then, you can initialize your Comet project. Comet will automatically detect the API key and proceed with the setup.
+Then, authenticate with Comet. The Ultralytics callback creates the experiment and uses the YOLO `project` training argument as the Comet project name.
 
 !!! example "Initialize Comet project"
 
@@ -69,14 +69,12 @@ Then, you can initialize your Comet project. Comet will automatically detect the
         ```python
         import comet_ml
 
-        comet_ml.login(project_name="comet-example-yolo26-coco128")
+        comet_ml.login()
         ```
 
 If you are using a Google Colab notebook, the code above will prompt you to enter your API key for initialization.
 
 ## Usage
-
-Before diving into the usage instructions, be sure to check out the range of [YOLO26 models offered by Ultralytics](../models/yolo26.md). This will help you choose the most appropriate model for your project requirements.
 
 !!! example "Usage"
 
@@ -101,18 +99,18 @@ Before diving into the usage instructions, be sure to check out the range of [YO
 
 After running the training code, Comet will create an experiment in your Comet workspace to track the run automatically. You will then be provided with a link to view the detailed logging of your [YOLO26 model's training](../modes/train.md) process.
 
-Comet automatically logs the following data with no additional configuration: metrics such as mAP and loss, hyperparameters, model checkpoints, interactive confusion matrix, and image [bounding box](https://www.ultralytics.com/glossary/bounding-box) predictions.
+Once Comet is installed and configured, its callback is enabled by default and logs metrics such as mAP and loss, hyperparameters, model checkpoints, and an interactive confusion matrix. Image [bounding box](https://www.ultralytics.com/glossary/bounding-box) predictions from the validation set are logged for detect and [segment training](https://www.comet.com/site/blog/fine-tuning-yolov8-for-image-segmentation-with-comet/) with `save_json=True`. Run `yolo settings comet=False` to disable the integration.
 
 ## Understanding Your Model's Performance with Comet Visualizations
 
-Let's dive into what you'll see on the Comet dashboard once your YOLO26 model begins training. The dashboard is where all the action happens, presenting a range of automatically logged information through visuals and statistics. Here's a quick tour:
+Once your YOLO26 model begins training, the Comet dashboard presents automatically logged information through visuals and statistics:
 
 **Experiment Panels**
 
 The experiment panels section of the Comet dashboard organizes and presents the different runs and their metrics, such as segment mask loss, class loss, precision, and [mean average precision](https://www.ultralytics.com/glossary/mean-average-precision-map).
 
 <p align="center">
-  <img width="640" src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/comet-ml-dashboard-overview.avif" alt="Comet ML experiment tracking dashboard">
+  <img width="640" src="https://cdn.ul.run/i/1c5db1d4fb62e6c797aa07edb63d5bd1.avif" alt="Comet experiment panels comparing YOLO26 training runs and metrics">
 </p>
 
 **Metrics**
@@ -120,7 +118,7 @@ The experiment panels section of the Comet dashboard organizes and presents the 
 In the metrics section, you have the option to examine the metrics in a tabular format as well, which is displayed in a dedicated pane as illustrated here.
 
 <p align="center">
-  <img width="640" src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/comet-ml-metrics-tabular.avif" alt="Comet ML experiment tracking dashboard">
+  <img width="640" src="https://cdn.ul.run/i/bafc0048079ac6eb4f75810873cebad7.avif" alt="Comet metrics pane listing YOLO26 training metrics in a table">
 </p>
 
 **Interactive [Confusion Matrix](https://www.ultralytics.com/glossary/confusion-matrix)**
@@ -128,7 +126,7 @@ In the metrics section, you have the option to examine the metrics in a tabular 
 The confusion matrix, found in the Confusion Matrix tab, provides an interactive way to assess the model's classification [accuracy](https://www.ultralytics.com/glossary/accuracy). It details the correct and incorrect predictions, allowing you to understand the model's strengths and weaknesses.
 
 <p align="center">
-  <img width="640" src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/comet-ml-interactive-confusion-matrix.avif" alt="Comet ML experiment tracking dashboard">
+  <img width="640" src="https://cdn.ul.run/i/3b562147e59c9e850c163417886a8ea8.avif" alt="Comet interactive confusion matrix for YOLO26 validation results">
 </p>
 
 **System Metrics**
@@ -136,30 +134,30 @@ The confusion matrix, found in the Confusion Matrix tab, provides an interactive
 Comet logs system metrics to help identify any bottlenecks in the training process. It includes metrics such as GPU utilization, GPU memory usage, CPU utilization, and RAM usage. These are essential for monitoring the efficiency of resource usage during model training.
 
 <p align="center">
-  <img width="640" src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/comet-ml-system-metrics.avif" alt="Comet ML experiment tracking dashboard">
+  <img width="640" src="https://cdn.ul.run/i/7182de7672f7dd9f5bb9a52fdd19c265.avif" alt="Comet system metrics showing GPU and CPU utilization during training">
 </p>
 
 ## Customizing Comet Logging
 
 Comet offers the flexibility to customize its logging behavior by setting environment variables. These configurations allow you to tailor Comet to your specific needs and preferences. The Ultralytics callback reads the following environment variables (set them before training starts):
 
-| Environment Variable                | Default        | Description                                                                                                |
-| ----------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------- |
-| `COMET_START_ONLINE`                | `1`            | Run the experiment in online (`1`) or offline (`0`) mode.                                                  |
-| `COMET_PROJECT_NAME`                | `args.project` | Comet workspace project. Falls back to the YOLO `project` training argument when unset.                    |
-| `COMET_MODEL_NAME`                  | `Ultralytics`  | Name registered for the logged model artifact.                                                             |
-| `COMET_MAX_IMAGE_PREDICTIONS`       | `100`          | Total number of validation image predictions to log per run.                                               |
-| `COMET_EVAL_BATCH_LOGGING_INTERVAL` | `1`            | Log image predictions every Nth validation batch.                                                          |
-| `COMET_EVAL_LOG_IMAGE_PREDICTIONS`  | `true`         | Toggle image prediction logging on (`true`) or off (`false`).                                              |
-| `COMET_EVAL_LOG_CONFUSION_MATRIX`   | `false`        | Log a confusion matrix on every validation epoch. A final matrix is always logged at end of training.      |
-| `COMET_MAX_CONFIDENCE_SCORE`        | `100.0`        | Multiplier applied to detection confidence scores before logging (Comet's UI expects a percentage scale).  |
-| `COMET_MODE` _(deprecated)_         | `online`       | Legacy alias of `COMET_START_ONLINE` (`"online"` ↔ `1`, `"offline"` ↔ `0`). Emits a deprecation warning. |
+| Environment Variable                | Default        | Description                                                                                               |
+| ----------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------- |
+| `COMET_START_ONLINE`                | `1`            | Run the experiment in online (`1`) or offline (`0`) mode.                                                 |
+| `COMET_PROJECT_NAME`                | `args.project` | Comet workspace project. Falls back to the YOLO `project` training argument when unset.                   |
+| `COMET_MODEL_NAME`                  | `Ultralytics`  | Name registered for the logged model artifact.                                                            |
+| `COMET_MAX_IMAGE_PREDICTIONS`       | `100`          | Total number of validation image predictions to log per run.                                              |
+| `COMET_EVAL_BATCH_LOGGING_INTERVAL` | `1`            | Log image predictions every Nth validation batch.                                                         |
+| `COMET_EVAL_LOG_IMAGE_PREDICTIONS`  | `true`         | Toggle image prediction logging on (`true`) or off (`false`).                                             |
+| `COMET_EVAL_LOG_CONFUSION_MATRIX`   | `false`        | Log a confusion matrix at each `save_period` checkpoint. A final matrix is always logged after training.  |
+| `COMET_MAX_CONFIDENCE_SCORE`        | `100.0`        | Multiplier applied to detection confidence scores before logging (Comet's UI expects a percentage scale). |
+| `COMET_MODE` _(deprecated)_         | `online`       | Legacy alias of `COMET_START_ONLINE` (`"online"` ↔ `1`, `"offline"` ↔ `0`). Emits a deprecation warning.  |
 
 For the boolean toggles (`COMET_EVAL_LOG_IMAGE_PREDICTIONS` and `COMET_EVAL_LOG_CONFUSION_MATRIX`), the values `1`, `true`, `yes`, `on`, `y`, and `t` are parsed as `True` (case-insensitive). Any other value is `False`.
 
 ### Logging Image Predictions
 
-You can control the number of image predictions that Comet logs during your experiments. By default, Comet logs 100 image predictions from the validation set. However, you can change this number to better suit your requirements. For example, to log 200 image predictions, use the following code:
+You can control the number of image predictions that Comet logs during your experiments. With `save_json=True`, Comet logs up to 100 image predictions from the validation set. However, you can change this number to better suit your requirements. For example, to log 200 image predictions, use the following code:
 
 ```python
 import os
@@ -167,13 +165,15 @@ import os
 os.environ["COMET_MAX_IMAGE_PREDICTIONS"] = "200"
 ```
 
-To disable image prediction logging entirely (for example, to reduce upload volume on slow connections), set `COMET_EVAL_LOG_IMAGE_PREDICTIONS` to `"false"`:
+To disable annotated image prediction logging (for example, to reduce upload volume on slow connections), set `COMET_EVAL_LOG_IMAGE_PREDICTIONS` to `"false"`:
 
 ```python
 import os
 
 os.environ["COMET_EVAL_LOG_IMAGE_PREDICTIONS"] = "false"
 ```
+
+The `train_batch*.jpg` and `val_batch*.jpg` plot images are still logged at the end of training.
 
 ### Batch Logging Interval
 
@@ -185,14 +185,14 @@ import os
 os.environ["COMET_EVAL_BATCH_LOGGING_INTERVAL"] = "4"
 ```
 
-### Disabling Confusion Matrix Logging
+### Per-Epoch Confusion Matrix Logging
 
-In some cases, you may not want to log the confusion matrix from your validation set after every [epoch](https://www.ultralytics.com/glossary/epoch). You can disable this feature by setting the `COMET_EVAL_LOG_CONFUSION_MATRIX` environment variable to "false." The confusion matrix will only be logged once, after the training is completed.
+By default, the confusion matrix from your validation set is logged once, after the training is completed. To also log it at every checkpoint saved by `save_period` (`save_period=1` saves every [epoch](https://www.ultralytics.com/glossary/epoch)), set the `COMET_EVAL_LOG_CONFUSION_MATRIX` environment variable to "true."
 
 ```python
 import os
 
-os.environ["COMET_EVAL_LOG_CONFUSION_MATRIX"] = "false"
+os.environ["COMET_EVAL_LOG_CONFUSION_MATRIX"] = "true"
 ```
 
 ### Online and Offline Mode
@@ -241,13 +241,9 @@ os.environ["COMET_MAX_CONFIDENCE_SCORE"] = "1.0"  # log raw [0, 1] scores
 
 ## Summary
 
-This guide has walked you through integrating Comet with Ultralytics' YOLO26. From installation to customization, you've learned to streamline experiment management, gain real-time insights, and adapt logging to your project's needs.
+This guide has walked you through integrating Comet with Ultralytics YOLO26. From installation to customization, you've learned to streamline experiment management, gain real-time insights, and adapt logging to your project's needs.
 
 Explore [Comet's official YOLOv8 integration documentation](https://www.comet.com/docs/v2/integrations/third-party-tools/yolov8/), which also applies to YOLO26 projects.
-
-Furthermore, if you're looking to dive deeper into the practical applications of YOLO26, specifically for [image segmentation](https://www.ultralytics.com/glossary/image-segmentation) tasks, this detailed guide on [fine-tuning YOLO26 with Comet](https://www.comet.com/site/blog/fine-tuning-yolov8-for-image-segmentation-with-comet/) offers valuable insights and step-by-step instructions to enhance your model's performance.
-
-Additionally, to explore other exciting integrations with Ultralytics, check out the [integration guide page](../integrations/index.md), which offers a wealth of resources and information.
 
 ## FAQ
 
@@ -258,7 +254,7 @@ To integrate Comet with Ultralytics YOLO26, follow these steps:
 1. **Install the required packages**:
 
     ```bash
-    pip install ultralytics comet_ml torch torchvision
+    pip install ultralytics comet_ml
     ```
 
 2. **Set up your Comet API Key**:
@@ -267,12 +263,12 @@ To integrate Comet with Ultralytics YOLO26, follow these steps:
     export COMET_API_KEY=YOUR_API_KEY
     ```
 
-3. **Initialize your Comet project in your Python code**:
+3. **Authenticate with Comet in your Python code**:
 
     ```python
     import comet_ml
 
-    comet_ml.login(project_name="comet-example-yolo26-coco128")
+    comet_ml.login()
     ```
 
 4. **Train your YOLO26 model and log metrics**:
@@ -302,7 +298,7 @@ By integrating Ultralytics YOLO26 with Comet, you can:
 - **Track experiments offline**: Log your training runs locally when internet access is unavailable.
 - **Compare different training runs**: Use the interactive Comet dashboard to analyze and compare multiple experiments.
 
-By leveraging these features, you can optimize your machine learning workflows for better performance and reproducibility. For more information, visit the [Comet integration guide](../integrations/index.md).
+With these features, you can optimize your machine learning workflows for better performance and reproducibility.
 
 ### How do I customize the logging behavior of Comet during YOLO26 training?
 
@@ -324,12 +320,12 @@ Comet allows for extensive customization of its logging behavior using environme
     os.environ["COMET_EVAL_BATCH_LOGGING_INTERVAL"] = "4"
     ```
 
-- **Disable confusion matrix logging**:
+- **Log the confusion matrix at every `save_period` checkpoint**:
 
     ```python
     import os
 
-    os.environ["COMET_EVAL_LOG_CONFUSION_MATRIX"] = "false"
+    os.environ["COMET_EVAL_LOG_CONFUSION_MATRIX"] = "true"
     ```
 
 - **Set the Comet project name**:
@@ -354,7 +350,7 @@ See the [Customizing Comet Logging](#customizing-comet-logging) section for the 
 
 Once your YOLO26 model starts training, you can access a wide range of metrics and visualizations on the Comet dashboard. Key features include:
 
-- **Experiment Panels**: View different runs and their metrics, including segment mask loss, class loss, and mean average [precision](https://www.ultralytics.com/glossary/precision).
+- **Experiment Panels**: View different runs and their metrics, including segment mask loss, class loss, and mean average precision.
 - **Metrics**: Examine metrics in tabular format for detailed analysis.
 - **Interactive Confusion Matrix**: Assess classification accuracy with an interactive confusion matrix.
 - **System Metrics**: Monitor GPU and CPU utilization, memory usage, and other system metrics.

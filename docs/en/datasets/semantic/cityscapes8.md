@@ -3,11 +3,11 @@ title: Cityscapes8 Semantic Segmentation Dataset
 comments: true
 creator:
     name: Ultralytics
-    url: https://www.ultralytics.com/
+    url: https://www.ultralytics.com
 license:
     name: Research-Only
     url: https://www.cityscapes-dataset.com/license/
-description: Explore the Ultralytics Cityscapes8 dataset, a compact set of 8 urban-scene images for testing semantic segmentation models and training pipelines.
+description: Ultralytics Cityscapes8 is an 8-image subset of Cityscapes for quickly testing YOLO semantic segmentation models, label mapping, and training pipelines.
 keywords: Cityscapes8, Ultralytics, dataset, semantic segmentation, YOLO26, semantic, training, validation, urban scenes, computer vision
 ---
 
@@ -15,9 +15,9 @@ keywords: Cityscapes8, Ultralytics, dataset, semantic segmentation, YOLO26, sema
 
 ## Introduction
 
-The [Ultralytics](https://www.ultralytics.com/) Cityscapes8 dataset is a compact [semantic segmentation](https://www.ultralytics.com/glossary/semantic-segmentation) dataset with 8 images sampled from the [Cityscapes](cityscapes.md) dataset: 4 for training and 4 for validation. It is designed for rapid testing, debugging, and experimentation with [YOLO](../../models/yolo26.md) semantic segmentation models and training pipelines. Its urban-scene content provides a useful pipeline check before scaling to the full Cityscapes dataset.
+The [Ultralytics](https://www.ultralytics.com) Cityscapes8 dataset is a compact [semantic segmentation](https://www.ultralytics.com/glossary/semantic-segmentation) dataset with 8 images sampled from the [Cityscapes](cityscapes.md) dataset: 4 for training and 4 for validation. It is designed for rapid testing, debugging, and experimentation with [YOLO](../../models/yolo26.md) semantic segmentation models and training pipelines. Its urban-scene content provides a useful pipeline check before scaling to the full Cityscapes dataset.
 
-Cityscapes8 uses the same 19 evaluation classes and the same `label_mapping` behavior as the full Cityscapes dataset, and is fully compatible with [YOLO26](../../models/yolo26.md) semantic segmentation workflows.
+Cityscapes8 uses the same 19 evaluation classes and the same `label_mapping` behavior as the full Cityscapes dataset, and is fully compatible with YOLO26 semantic segmentation workflows.
 
 !!! note
 
@@ -39,8 +39,6 @@ cityscapes8/
 
 Masks are paired with images via the `masks_dir: masks` field, and `label_mapping` converts source Cityscapes label IDs into the 19 contiguous train IDs described in the [full Cityscapes dataset structure](cityscapes.md#dataset-structure).
 
-Explore [Cityscapes8 on Ultralytics Platform](https://platform.ultralytics.com/ultralytics/datasets/cityscapes8) to browse every image with its segmentation masks and clone it to train in the cloud.
-
 ## Dataset YAML
 
 The Cityscapes8 dataset configuration is defined in a dataset YAML file, which specifies dataset paths, class names, and other essential metadata. You can review the official `cityscapes8.yaml` file in the [Ultralytics GitHub repository](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/cityscapes8.yaml). The YAML includes a download URL for the small packaged subset.
@@ -53,7 +51,7 @@ The Cityscapes8 dataset configuration is defined in a dataset YAML file, which s
 
 ## Usage
 
-To train a YOLO26n-sem model on the Cityscapes8 dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 1024, use the following examples. For a full list of training options, see the [YOLO Training documentation](../../modes/train.md).
+To [train](../../modes/train.md) a [YOLO26n-sem](https://platform.ultralytics.com/ultralytics/yolo26/yolo26n-sem) model on the Cityscapes8 dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 1024, use the following examples.
 
 !!! example "Train Example"
 
@@ -76,13 +74,15 @@ To train a YOLO26n-sem model on the Cityscapes8 dataset for 100 [epochs](https:/
         yolo semantic train data=cityscapes8.yaml model=yolo26n-sem.pt epochs=100 imgsz=1024
         ```
 
+You can also manage Cityscapes8 and train semantic segmentation models in the cloud with [Ultralytics Platform](https://platform.ultralytics.com/ultralytics/datasets/cityscapes8).
+
 ## Citations, License and Acknowledgments
 
 Cityscapes8 is sampled from Cityscapes, which is released under a [custom non-commercial license](https://www.cityscapes-dataset.com/license/) — see the full [Cityscapes dataset page](cityscapes.md#citations-license-and-acknowledgments) for details.
 
 If you use the Cityscapes dataset in your research or development, please cite the following paper:
 
-!!! quote ""
+!!! quote "Citation"
 
     === "BibTeX"
 

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from ultralytics.utils import LOGGER
-from ultralytics.utils.checks import check_requirements, is_rockchip
+from ultralytics.utils.checks import ONNXRUNTIME_BUILDS, check_requirements, is_rockchip
 
 from .base import BaseBackend
 
@@ -49,22 +50,29 @@ class RKNNBackend(BaseBackend):
         if ret != 0:
             raise RuntimeError(f"Failed to init RKNN runtime: {ret}")
 
-        # Load metadata
-        metadata_file = w.parent / "metadata.yaml"
-        if metadata_file.exists():
-            from ultralytics.utils import YAML
+        self.tail = None
+        if (w.parent / "tail.onnx").is_file():
+            check_requirements([ONNXRUNTIME_BUILDS])
+            import onnxruntime
 
-            self.apply_metadata(YAML.load(metadata_file))
+            self.tail = onnxruntime.InferenceSession(str(w.parent / "tail.onnx"), providers=["CPUExecutionProvider"])
+        self.apply_metadata(self.read_metadata(w))
 
     def forward(self, im: torch.Tensor) -> list:
         """Run inference on the Rockchip NPU.
 
         Args:
-            im (torch.Tensor): Input image tensor in BCHW format, normalized to [0, 1].
+            im (torch.Tensor): Input image tensor in BHWC format, normalized to [0, 1].
 
         Returns:
             (list): Model predictions as a list of output arrays.
         """
         im = (im.cpu().numpy() * 255).astype("uint8")
-        im = im if isinstance(im, (list, tuple)) else [im]
-        return self.model.inference(inputs=im)
+        y = self.model.inference(inputs=[im])
+        if self.tail:  # INT8 exports decode head outputs on the host in floating point with a batch-1 tail graph
+            feeds = [
+                {t.name: v[i : i + 1].astype(np.float32) for t, v in zip(self.tail.get_inputs(), y)}
+                for i in range(len(im))
+            ]
+            y = [np.concatenate(x) for x in zip(*(self.tail.run(None, f) for f in feeds))]
+        return y

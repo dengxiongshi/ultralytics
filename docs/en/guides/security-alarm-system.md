@@ -1,40 +1,38 @@
 ---
 title: Security Alarm System with YOLO26
 comments: true
-description: Enhance your security with real-time object detection using Ultralytics YOLO26. Reduce false positives and integrate seamlessly with existing systems.
+description: Build a security alarm with the Ultralytics YOLO26 SecurityAlarm solution, tracking objects in video and emailing an alert with an annotated image.
 keywords: YOLO26, Security Alarm System, real-time object detection, Ultralytics, computer vision, integration, false positives
 ---
 
 # Security Alarm System Project Using Ultralytics YOLO26
 
-<img src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/security-alarm-system-ultralytics-yolov8.avif" alt="AI-powered security alarm system with object detection">
+<img src="https://cdn.ul.run/i/77e52e705cc6d6a5c6b0c939c3710813.avif" alt="AI-powered security alarm system with object detection">
 
-The Security Alarm System Project utilizing Ultralytics YOLO26 integrates advanced [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) capabilities to enhance security measures. YOLO26, developed by Ultralytics, provides real-time [object detection](https://www.ultralytics.com/glossary/object-detection), allowing the system to identify and respond to potential security threats promptly. This project offers several advantages:
+This project uses Ultralytics YOLO26 [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) to build a [security alarm system](https://www.ultralytics.com/blog/security-alarm-system-projects-with-ultralytics-yolov8). YOLO26 provides real-time [object detection](https://www.ultralytics.com/glossary/object-detection), allowing the system to identify and respond to potential security threats promptly. This project offers several advantages:
 
-- **Real-time Detection:** YOLO26's efficiency enables the Security Alarm System to detect and respond to security incidents in real-time, minimizing response time.
-- **[Accuracy](https://www.ultralytics.com/glossary/accuracy):** YOLO26 is known for its accuracy in object detection, reducing false positives and enhancing the reliability of the security alarm system.
-- **Integration Capabilities:** The project can be seamlessly integrated with existing security infrastructure, providing an upgraded layer of intelligent surveillance.
+- **Real-time Detection:** YOLO26's efficiency enables the Security Alarm System to detect and respond to security incidents in real time, minimizing response time.
+- **[Accuracy](https://www.ultralytics.com/glossary/accuracy):** YOLO26's accurate object detection reduces false positives and improves the reliability of the security alarm system.
+- **Integration Capabilities:** The project can [add AI analytics to existing security cameras](https://www.ultralytics.com/blog/add-ai-analytics-existing-security-cameras), providing an intelligent detection layer on top of current surveillance.
 
 <p align="center">
   <br>
-  <iframe loading="lazy" width="720" height="405" src="https://www.youtube.com/embed/DTjtBnSK2fY"
+  <iframe loading="lazy" width="720" height="405" src="https://www.youtube.com/embed/ij9cnYM0EVE"
     title="YouTube video player" frameborder="0"
     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
     allowfullscreen>
   </iframe>
   <br>
-  <strong>Watch:</strong> Security Alarm System with Ultralytics YOLO26 + Solutions <a href="https://www.ultralytics.com/glossary/object-detection">Object Detection</a>
+  <strong>Watch:</strong> Security Alarm System with Ultralytics YOLO26 + Solutions Object Detection
 </p>
 
 ## Send Security Alerts with YOLO26
 
 The `SecurityAlarm` solution tracks objects in your video feed and sends a single email alert with an annotated image attached as soon as the number of detections meets the `records` threshold. Authenticate a Gmail account with an app password, then run the solution over your source.
 
-???+ note
+!!! note "App password required"
 
-    App Password Generation is necessary
-
-- Navigate to [App Password Generator](https://myaccount.google.com/apppasswords), designate an app name such as "security project," and obtain a 16-digit password. Copy this password and paste it into the designated `password` field in the code below.
+    Navigate to the [App Password Generator](https://myaccount.google.com/apppasswords), designate an app name such as "security project", and obtain a 16-character password. Copy this password and paste it into the `password` field in the code below.
 
 !!! example "Security Alarm System using Ultralytics YOLO"
 
@@ -53,7 +51,7 @@ The `SecurityAlarm` solution tracks objects in your video feed and sends a singl
         video_writer = cv2.VideoWriter("security_output.avi", cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
 
         from_email = "abc@gmail.com"  # the sender email address
-        password = "---- ---- ---- ----"  # 16-digits password generated via: https://myaccount.google.com/apppasswords
+        password = "---- ---- ---- ----"  # 16-character app password generated via: https://myaccount.google.com/apppasswords
         to_email = "xyz@gmail.com"  # the receiver email address
 
         # Initialize security alarm object
@@ -91,61 +89,61 @@ The `SecurityAlarm` solution tracks objects in your video feed and sends a singl
         ```
 
         !!! note
+
             Email alerts require the Python API to call `.authenticate()`. The CLI provides detection and visualization only.
 
 When you run the code, you will receive a single email notification if any object is detected. The notification is sent immediately, not repeatedly. You can customize the code to suit your project requirements.
 
 ### Email Received Sample
 
-<img width="256" src="https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/email-received-sample.avif" alt="Security alert email notification example">
+<img width="256" src="https://cdn.ul.run/i/9052f41f574c28af50a2d80333f0a12c.avif" alt="Security alert email notification example">
 
 ### `SecurityAlarm` Arguments
 
 Here's a table with the `SecurityAlarm` arguments:
 
 {% from "macros/solutions-args.md" import param_table %}
-{{ param_table(["model", "records"]) }}
+{{ param_table(["model", "records", "line_width", "verbose"]) }}
 
 The `SecurityAlarm` solution supports a variety of `track` parameters:
 
-{% from "macros/track-args.md" import param_table %}
-{{ param_table(["tracker", "conf", "iou", "classes", "verbose", "device"]) }}
+{% include "macros/solutions-track-args.md" %}
 
 Moreover, the following visualization settings are available:
 
 {% from "macros/visualization-args.md" import param_table %}
-{{ param_table(["show", "line_width", "show_conf", "show_labels"]) }}
+{{ param_table(["show", "show_conf", "show_labels"]) }}
 
 ## How It Works
 
-The Security Alarm System uses [object tracking](../modes/track.md) to monitor video feeds and detect potential security threats. When the system detects objects that exceed the specified threshold (set by the `records` parameter), it automatically sends an email notification with an image attachment showing the detected objects.
+The Security Alarm System uses [object tracking](../modes/track.md) to monitor video feeds and detect potential security threats. When the number of detected objects in a frame reaches the specified threshold (set by the `records` parameter), it automatically sends an email notification with an image attachment showing the detected objects.
 
 The system leverages the [SecurityAlarm class](../reference/solutions/security_alarm.md) which provides methods to:
 
 1. Process frames and extract object detections
 2. Annotate frames with bounding boxes around detected objects
-3. Send email notifications when detection thresholds are exceeded
+3. Send email notifications when detection thresholds are met
 
-This implementation is ideal for home security, retail surveillance, and other monitoring applications where immediate notification of detected objects is critical.
+This implementation suits home security, retail surveillance, and other monitoring applications where immediate notification of detected objects is critical.
 
 ## FAQ
 
 ### How does Ultralytics YOLO26 improve the accuracy of a security alarm system?
 
-Ultralytics YOLO26 enhances security alarm systems by delivering high-accuracy, real-time object detection. Its advanced algorithms significantly reduce false positives, ensuring that the system only responds to genuine threats. This increased reliability can be seamlessly integrated with existing security infrastructure, upgrading the overall surveillance quality.
+Ultralytics YOLO26 improves security alarm systems by delivering accurate, real-time object detection, which reduces false positives so the system responds mainly to genuine events. You can reduce false alarms further by restricting detection to relevant `classes` (for example, only people), raising the `conf` threshold, or increasing `records`.
 
 ### Can I integrate Ultralytics YOLO26 with my existing security infrastructure?
 
-Yes, Ultralytics YOLO26 can be seamlessly integrated with your existing security infrastructure. The system supports various modes and provides flexibility for customization, allowing you to enhance your existing setup with advanced object detection capabilities. For detailed instructions on integrating YOLO26 in your projects, visit the [integration section](../integrations/index.md).
+Yes. The `SecurityAlarm` solution processes frames from any source OpenCV can read, including video files, webcams, and RTSP streams from IP cameras, so you can add YOLO26 detection to an existing camera setup.
 
 ### What are the storage requirements for running Ultralytics YOLO26?
 
-Running Ultralytics YOLO26 on a standard setup typically requires around 5GB of free disk space. This includes space for storing the YOLO26 model and any additional dependencies. For cloud-based solutions, [Ultralytics Platform](../platform/index.md) offers efficient project management and dataset handling, which can optimize storage needs. Learn more about the [Pro Plan](../platform/account/billing.md) for enhanced features including extended storage.
+Running Ultralytics YOLO26 on a standard setup typically requires around 5GB of free disk space. This includes space for storing the YOLO26 model and any additional dependencies. For cloud-based solutions, [Ultralytics Platform](../platform/index.md) offers efficient project management and dataset handling, which can optimize storage needs. The [Pro Plan](../platform/account/billing.md#pro-plan) increases storage to 500 GB.
 
 ### What makes Ultralytics YOLO26 different from other object detection models like Faster R-CNN or SSD?
 
-Ultralytics YOLO26 provides an edge over models like Faster R-CNN or SSD with its real-time detection capabilities and higher accuracy. Its unique architecture allows it to process images much faster without compromising on [precision](https://www.ultralytics.com/glossary/precision), making it ideal for time-sensitive applications like security alarm systems. For a comprehensive comparison of object detection models, you can explore our [guide](../models/index.md).
+Ultralytics YOLO26 provides an edge over models like Faster R-CNN or SSD with its real-time detection capabilities and higher accuracy. Its single-stage architecture processes images much faster without compromising accuracy, making it well suited to time-sensitive applications like security alarm systems.
 
 ### How can I reduce the frequency of false positives in my security system using Ultralytics YOLO26?
 
-To reduce false positives, ensure your Ultralytics YOLO26 model is adequately trained with a diverse and well-annotated dataset. Fine-tuning hyperparameters and regularly updating the model with new data can significantly improve detection accuracy. Detailed [hyperparameter tuning](https://www.ultralytics.com/glossary/hyperparameter-tuning) techniques can be found in our [hyperparameter tuning guide](../guides/hyperparameter-tuning.md).
+To reduce false positives, ensure your Ultralytics YOLO26 model is adequately trained with a diverse and well-annotated dataset. [Tuning hyperparameters](hyperparameter-tuning.md) and regularly updating the model with new data can significantly improve detection accuracy.

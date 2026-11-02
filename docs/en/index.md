@@ -1,17 +1,17 @@
 ---
 title: YOLO Object Detection & Segmentation
 comments: true
-description: Discover Ultralytics YOLO - the latest in real-time object detection and image segmentation. Learn about its features and maximize its potential in your projects.
+description: Official Ultralytics YOLO docs to install, train, validate, predict, export, and track YOLO26 models for detection, segmentation, depth, classification, pose, and OBB.
 keywords: Ultralytics, YOLO, YOLO26, YOLO11, object detection, image segmentation, deep learning, computer vision, AI, machine learning, documentation, tutorial
 ---
 
 <div align="center">
 <br><br>
-<a href="https://platform.ultralytics.com/ultralytics/yolo26?utm_source=docs&utm_medium=referral&utm_campaign=platform_launch&utm_content=banner&utm_term=ultralytics_docs" target="_blank"><img width="100%" src="https://raw.githubusercontent.com/ultralytics/assets/main/yolov8/banner-yolov8.png" alt="Ultralytics YOLO banner"></a>
+<a href="https://www.ultralytics.com/yolo/yolo27" target="_blank"><img width="100%" src="https://raw.githubusercontent.com/ultralytics/assets/main/yolov8/banner-yolov8.png" alt="Ultralytics YOLO banner"></a>
 <br><br>
 </div>
 
-<p align="center">
+<p align="center" translate="no">
 <a href="https://docs.ultralytics.com/zh">中文</a> ·
 <a href="https://docs.ultralytics.com/ko">한국어</a> ·
 <a href="https://docs.ultralytics.com/ja">日本語</a> ·
@@ -30,7 +30,7 @@ keywords: Ultralytics, YOLO, YOLO26, YOLO11, object detection, image segmentatio
     <a href="https://github.com/ultralytics/ultralytics/actions/workflows/ci.yml"><img src="https://github.com/ultralytics/ultralytics/actions/workflows/ci.yml/badge.svg" alt="Ultralytics CI"></a>
     <a href="https://clickpy.clickhouse.com/dashboard/ultralytics"><img src="https://static.pepy.tech/badge/ultralytics" alt="Ultralytics Downloads"></a>
     <a href="https://discord.com/invite/ultralytics"><img alt="Ultralytics Discord" src="https://img.shields.io/discord/1089800235347353640?logo=discord&logoColor=white&label=Discord&color=blue"></a>
-    <a href="https://community.ultralytics.com/"><img alt="Ultralytics Forums" src="https://img.shields.io/discourse/users?server=https%3A%2F%2Fcommunity.ultralytics.com&logo=discourse&label=Forums&color=blue"></a>
+    <a href="https://community.ultralytics.com"><img alt="Ultralytics Forums" src="https://img.shields.io/discourse/users?server=https%3A%2F%2Fcommunity.ultralytics.com&logo=discourse&label=Forums&color=blue"></a>
     <a href="https://www.reddit.com/r/ultralytics/"><img alt="Ultralytics Reddit" src="https://img.shields.io/reddit/subreddit-subscribers/ultralytics?style=flat&logo=reddit&logoColor=white&label=Reddit&color=blue"></a>
     <br>
     <a href="https://console.paperspace.com/github/ultralytics/ultralytics"><img src="https://assets.paperspace.io/img/gradient-badge.svg" alt="Run Ultralytics on Gradient"></a>
@@ -42,17 +42,21 @@ keywords: Ultralytics, YOLO, YOLO26, YOLO11, object detection, image segmentatio
 
 # Ultralytics YOLO Docs
 
-[Ultralytics](https://www.ultralytics.com) YOLO is a family of real-time computer vision models for object detection, instance segmentation, semantic segmentation, classification, pose estimation, oriented bounding boxes, and tracking, available through one Python package and CLI. YOLO26 is built on deep learning and computer vision advancements, featuring end-to-end NMS-free inference and optimized edge deployment. Its streamlined design makes it suitable for various applications and easily adaptable to different hardware platforms, from edge devices to cloud APIs. For stable production workloads, both [YOLO26](models/yolo26.md) and [YOLO11](models/yolo11.md) are recommended.
+[Ultralytics](https://www.ultralytics.com) YOLO is a family of real-time [computer vision](https://www.ultralytics.com/glossary/computer-vision-cv) models for object detection, instance segmentation, semantic segmentation, depth estimation, classification, pose estimation, oriented bounding boxes, and tracking, available through one Python package and CLI. YOLO26 builds on recent [deep learning](https://www.ultralytics.com/glossary/deep-learning-dl) research, with optional [NMS](https://www.ultralytics.com/glossary/non-maximum-suppression-nms)-free end-to-end inference and optimized edge deployment. Its streamlined design adapts to a wide range of applications and hardware, from edge devices to cloud APIs. For stable production workloads, both [YOLO26](models/yolo26.md) and [YOLO11](models/yolo11.md) are recommended.
 
-Explore the Ultralytics Docs, a comprehensive resource covering the YOLO package and CLI as well as the [Ultralytics Platform](platform/index.md), which adds data annotation, cloud training, and deployment on top of the same models. Whether you are a seasoned machine learning practitioner or new to the field, this hub aims to help you get the most out of YOLO in your projects.
+Explore the Ultralytics Docs, a comprehensive resource covering the YOLO package and CLI as well as the [Ultralytics Platform](platform/index.md), which adds data annotation, cloud training, and deployment on top of the same models. Whether you are an experienced [machine learning](https://www.ultralytics.com/glossary/machine-learning-ml) practitioner or [new to the field](https://academy.ultralytics.com/courses/train-your-first-yolo), these resources help you get the most out of YOLO in your projects.
 
 Request an Enterprise License for commercial use at [Ultralytics Licensing](https://www.ultralytics.com/license?utm_source=docs.ultralytics.com&utm_medium=referral&utm_content=license_inline_link).
 
-!!! tip "🚀 New: Knowledge Distillation"
+!!! info "YOLO27 is coming soon"
 
-    Train smaller YOLO models with guidance from a larger teacher model — no extra inference cost, just better accuracy.
+    Explore the [YOLO27 preview](models/yolo27.md), including architecture details, preliminary benchmarks, and examples for use after release. Models are undergoing final R&D for an anticipated launch later this year; they are not yet available, and no launch date is set.
 
-    [:octicons-arrow-right-24: Learn more](guides/knowledge-distillation.md)
+!!! tip "🚀 New: Monocular Depth Estimation"
+
+    Turn a single photo into a depth map, a distance in meters for every pixel.
+
+    [:octicons-arrow-right-24: Learn more](tasks/depth.md)
 
 ## Get Started in Two Commands
 
@@ -64,9 +68,9 @@ pip install ultralytics
 yolo predict model=yolo26n.pt source='https://github.com/ultralytics/assets/releases/download/v0.0.0/bus.jpg'
 ```
 
-The model weights and the example image download automatically, and the annotated result is saved to `runs/detect/predict`.
+The model weights and the example image download automatically, and the annotated result is saved to the directory the command prints, `runs/detect/predict` on a first run.
 
-See the [Quickstart](quickstart.md) guide for the full installation and usage reference.
+See the [Quickstart](quickstart.md) guide for every installation method and your first prediction.
 
 ## What Do You Want to Do?
 
@@ -76,7 +80,7 @@ See the [Quickstart](quickstart.md) guide for the full installation and usage re
 
     ***
 
-    Fine-tune a pretrained YOLO26 model on your own dataset, tuning augmentation and hyperparameters for multi-GPU training
+    Fine-tune a [pretrained YOLO26 model](https://platform.ultralytics.com/ultralytics/yolo26) on your own dataset, tuning augmentation and hyperparameters for multi-GPU training
 
     ***
 
@@ -96,7 +100,7 @@ See the [Quickstart](quickstart.md) guide for the full installation and usage re
 
     ***
 
-    Track objects across video frames with a persistent ID using BoT-SORT or ByteTrack, built into YOLO26's predict pipeline
+    Track objects with persistent IDs using TrackTrack (default), BoT-SORT, ByteTrack, OC-SORT, Deep OC-SORT, or FastTracker
 
     ***
 
@@ -146,7 +150,7 @@ See the [Quickstart](quickstart.md) guide for the full installation and usage re
 
     ***
 
-    Ultralytics' newest model family delivers NMS-free, end-to-end inference with an improved accuracy-latency tradeoff over YOLO11
+    Ultralytics' latest released model family delivers optional NMS-free end-to-end inference and an improved accuracy-latency tradeoff over YOLO11
 
     ***
 
@@ -158,7 +162,7 @@ See the [Quickstart](quickstart.md) guide for the full installation and usage re
 
 Most model workflow `yolo` commands follow one grammar, `yolo [TASK] MODE ARGS`, where Task is optional, and these docs are organized around the same three parts, plus one shortcut:
 
-- **[Task](tasks/index.md)** answers **what** you want from an image: [detection](tasks/detect.md), [instance segmentation](tasks/segment.md), [semantic segmentation](tasks/semantic.md), [classification](tasks/classify.md), [pose estimation](tasks/pose.md), or [oriented boxes](tasks/obb.md).
+- **[Task](tasks/index.md)** answers **what** you want from an image: [detection](tasks/detect.md), [instance segmentation](tasks/segment.md), [semantic segmentation](tasks/semantic.md), [depth estimation](tasks/depth.md), [classification](tasks/classify.md), [pose estimation](tasks/pose.md), or [oriented boxes](tasks/obb.md).
 - **[Mode](modes/index.md)** answers **how** you use a model: [train](modes/train.md), [validate](modes/val.md), [predict](modes/predict.md), [export](modes/export.md), [track](modes/track.md), or [benchmark](modes/benchmark.md).
 - **[Args](usage/cfg.md)** configures the command, from which [model](models/index.md) to run with `model=` to hyperparameters like `epochs` and `imgsz`.
 - **[Solutions](solutions/index.md)** is the shortcut: a finished application, like object counting or a security alarm, that skips Task and Mode entirely.
@@ -170,12 +174,12 @@ Beyond the Python package, two more surfaces run on the same models: the [Ultral
 ## YOLO Licenses: How is Ultralytics YOLO licensed?
 
 <a href="https://www.ultralytics.com/license?utm_source=docs.ultralytics.com&utm_medium=referral&utm_content=license_banner" target="_blank" rel="noopener noreferrer">
-<img width="100%" style="border-radius:.4rem" src="https://raw.githubusercontent.com/ultralytics/assets/main/yolov8/banner-license.avif" alt="Ultralytics Enterprise License banner"></a>
+<img width="100%" style="border-radius:.4rem" src="https://cdn.ul.run/i/f349bcf492eb2982b9a5e7711c984585.avif" alt="Ultralytics Enterprise License banner"></a>
 
 Ultralytics offers two licensing options to accommodate diverse use cases:
 
 - **AGPL-3.0 License**: This [OSI-approved](https://opensource.org/license/agpl-3.0) open-source license is ideal for students and enthusiasts, promoting open collaboration and knowledge sharing. See the [LICENSE](https://github.com/ultralytics/ultralytics/blob/main/LICENSE) file for more details.
-- **Enterprise License**: For development and production use, this license enables seamless integration of Ultralytics software and AI models into business products and services, including internal tools, automated workflows, and production deployments, bypassing the open-source requirements of AGPL-3.0. To get started, please contact us via [Ultralytics Licensing](https://www.ultralytics.com/license).
+- **Enterprise License**: For development and production use, this license allows Ultralytics software and AI models to be integrated into business products and services, including internal tools, automated workflows, and production deployments, bypassing the open-source requirements of AGPL-3.0. To get started, please contact us via [Ultralytics Licensing](https://www.ultralytics.com/license).
 
 Our licensing strategy is designed to ensure that any improvements to our open-source projects are returned to the community. We believe in open source, and our mission is to ensure that our contributions can be used and expanded in ways that benefit everyone.
 
@@ -183,7 +187,7 @@ Our licensing strategy is designed to ensure that any improvements to our open-s
 
 ### What is Ultralytics YOLO and how does it improve object detection?
 
-Ultralytics YOLO is the acclaimed YOLO (You Only Look Once) series for real-time object detection and image segmentation. The latest model, [YOLO26](models/yolo26.md), builds on previous versions by introducing end-to-end NMS-free inference and optimized edge deployment. YOLO supports various [vision AI tasks](tasks/index.md) such as [detection](tasks/detect.md), [instance segmentation](tasks/segment.md), [semantic segmentation](tasks/semantic.md), [pose estimation](tasks/pose.md), [tracking](modes/track.md), and [classification](tasks/classify.md). Its efficient architecture ensures excellent speed and accuracy, making it suitable for diverse applications, including edge devices and cloud APIs.
+Ultralytics YOLO is a family of real-time You Only Look Once (YOLO) models for object detection and image segmentation. The latest released model, [YOLO26](models/yolo26.md), builds on previous versions by introducing optional NMS-free end-to-end inference and optimized edge deployment. YOLO supports various [vision AI tasks](tasks/index.md) such as [detection](tasks/detect.md), [instance segmentation](tasks/segment.md), [semantic segmentation](tasks/semantic.md), [depth estimation](tasks/depth.md), [classification](tasks/classify.md), [pose estimation](tasks/pose.md), and [oriented bounding boxes](tasks/obb.md), and can [track](modes/track.md) detected objects across video frames. Its efficient architecture balances speed and accuracy, making it suitable for applications from edge devices to cloud APIs.
 
 ### How can I get started with YOLO installation and setup?
 
@@ -191,7 +195,7 @@ Getting started with YOLO is quick and straightforward. Install the Ultralytics 
 
 ### How can I train a custom YOLO model on my dataset?
 
-Training a custom YOLO model on your dataset involves a few detailed steps:
+Training a custom YOLO model on your dataset involves three steps:
 
 1. Prepare your annotated dataset and describe it in a dataset YAML file.
 2. Load a pretrained model, for example `YOLO("yolo26n.pt")` in Python.

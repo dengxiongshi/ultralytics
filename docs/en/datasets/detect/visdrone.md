@@ -54,7 +54,7 @@ The dataset annotates 10 object classes: pedestrian, people, bicycle, car, van, 
 
 ## Applications
 
-VisDrone's dense scenes and tiny targets make it a standard benchmark for [small-object detection](https://www.ultralytics.com/glossary/object-detection) from aerial viewpoints. Common applications include:
+VisDrone's dense scenes and tiny targets make it a standard benchmark for [small-object detection](https://www.ultralytics.com/blog/exploring-small-object-detection-with-ultralytics-yolo11) from aerial viewpoints. Common [drone computer vision applications](https://www.ultralytics.com/blog/computer-vision-applications-ai-drone-uav-operations) include:
 
 - Traffic monitoring and vehicle counting from UAVs
 - Crowd analysis and public-safety surveillance
@@ -79,7 +79,7 @@ The `VisDrone.yaml` file defines the dataset configuration — the dataset paths
 
     VisDrone downloads automatically the first time you train — three archives totaling about 2 GB — and needs roughly 4 GB of free disk space during extraction and conversion.
 
-To train a YOLO26n model on the VisDrone dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 640, you can use the following code snippets. For a comprehensive list of available arguments, refer to the model [Training](../../modes/train.md) page.
+To [train](../../modes/train.md) a [YOLO26n](https://platform.ultralytics.com/ultralytics/yolo26/yolo26n) model on the VisDrone dataset for 100 [epochs](https://www.ultralytics.com/glossary/epoch) with an image size of 640, you can use the following code snippets.
 
 !!! example "Train Example"
 
@@ -103,19 +103,19 @@ To train a YOLO26n model on the VisDrone dataset for 100 [epochs](https://www.ul
         yolo detect train data=VisDrone.yaml model=yolo26n.pt epochs=100 imgsz=640
         ```
 
-To label additional aerial images and manage VisDrone training runs in your browser, use [Ultralytics Platform](https://platform.ultralytics.com/).
+To label additional aerial images and manage VisDrone training runs in your browser, use [Ultralytics Platform](https://platform.ultralytics.com/ultralytics/datasets/visdrone).
 
 ## Sample Data and Annotations
 
 The sample below shows a typical VisDrone scene: an aerial viewpoint over a busy road where pedestrians and vehicles appear as small, densely packed targets, many partially occluded by one another.
 
-![VisDrone dataset aerial drone imagery with object detection](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/visdrone-object-detection-sample.avif)
+![VisDrone dataset aerial drone imagery with object detection](https://cdn.ul.run/i/ba4380b79e064e9f1e2803e69eaa0ace.avif)
 
 ## Citations and Acknowledgments
 
 If you use the VisDrone dataset in your research or development work, please cite the following paper:
 
-!!! quote ""
+!!! quote "Citation"
 
     === "BibTeX"
 
@@ -180,7 +180,7 @@ Objects in VisDrone are tiny relative to the frame — often only a few dozen pi
 
 ### What is the difference between VisDrone-DET and the full VisDrone benchmark?
 
-The full VisDrone benchmark spans five tasks — object detection in images, object detection in videos, single-object tracking, [multi-object tracking](../index.md#multi-object-tracking), and crowd counting — across 288 video clips and 10,209 static images. The Ultralytics `VisDrone.yaml` configuration covers only the image detection task (VisDrone2019-DET), downloading its 6,471 train, 548 validation, and 1,610 test-dev images.
+The full VisDrone benchmark spans five tasks — object detection in images, object detection in videos, single-object tracking, [multi-object tracking](../track/index.md), and crowd counting — across 288 video clips and 10,209 static images. The Ultralytics `VisDrone.yaml` configuration covers only the image detection task (VisDrone2019-DET), downloading its 6,471 train, 548 validation, and 1,610 test-dev images.
 
 ### How do I cite VisDrone in my research?
 

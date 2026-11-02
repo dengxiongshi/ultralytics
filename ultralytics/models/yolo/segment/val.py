@@ -25,7 +25,6 @@ class SegmentationValidator(DetectionValidator):
         process (callable): Function to process masks based on save_json and save_txt flags.
         args (SimpleNamespace): Arguments for the validator.
         metrics (SegmentMetrics): Metrics calculator for segmentation tasks.
-        stats (dict): Dictionary to store statistics during validation.
 
     Examples:
         >>> from ultralytics.models.yolo.segment import SegmentationValidator
@@ -66,7 +65,7 @@ class SegmentationValidator(DetectionValidator):
         return batch
 
     def init_metrics(self, model: torch.nn.Module) -> None:
-        """Initialize metrics and select mask processing function based on save_json flag.
+        """Initialize metrics and select mask processing function based on save_json and save_txt flags.
 
         Args:
             model (torch.nn.Module): Model to validate.
@@ -323,13 +322,15 @@ class SegmentationValidator(DetectionValidator):
             batch (dict[str, Any]): Batch containing images and annotations.
             preds (list[dict[str, torch.Tensor]]): List of predictions from the model.
             ni (int): Batch index.
+            max_det (int | None): Maximum number of detections to plot per image, defaults to `args.max_det`.
         """
+        max_det = max_det or self.args.max_det
         for p in preds:
             masks = p["masks"]
-            if masks.shape[0] > self.args.max_det:
-                LOGGER.warning(f"Limiting validation plots to 'max_det={self.args.max_det}' items.")
-            p["masks"] = torch.as_tensor(masks[: self.args.max_det], dtype=torch.uint8).cpu()
-        super().plot_predictions(batch, preds, ni, max_det=self.args.max_det)  # plot bboxes
+            if masks.shape[0] > max_det:
+                LOGGER.warning(f"Limiting validation plots to 'max_det={max_det}' items.")
+            p["masks"] = torch.as_tensor(masks[:max_det], dtype=torch.uint8).cpu()
+        super().plot_predictions(batch, preds, ni, max_det=max_det)  # plot bboxes
 
     def save_one_txt(self, predn: dict[str, torch.Tensor], save_conf: bool, shape: tuple[int, int], file: Path) -> None:
         """Save YOLO detections to a txt file in normalized coordinates in a specific format.
@@ -359,39 +360,24 @@ class SegmentationValidator(DetectionValidator):
         """
 
         def to_string(counts: list[int]) -> str:
-            """Converts the RLE object into a compact string representation. Each count is delta-encoded and
-            variable-length encoded as a string.
+            """Convert RLE counts into a compact string representation.
+
+            Each count is delta-encoded and variable-length encoded as a string, matching the COCO compressed RLE format.
 
             Args:
                 counts (list[int]): List of RLE counts.
+
+            Returns:
+                (str): Compressed RLE string.
             """
-            result = []
+            x = np.asarray(counts, dtype=np.int64)
+            x[3:] -= x[1:-2]  # delta encoding starts at the fourth count
+            chunks = x[:, None] >> np.arange(0, (h * w).bit_length() + 1, 5)  # signed 5-bit groups
+            more = (chunks < -16) | (chunks > 15)
+            keep = np.concatenate((np.ones((len(x), 1), dtype=bool), more[:, :-1]), axis=1)
+            return (((chunks & 0x1F) | (more << 5)) + 48)[keep].astype(np.uint8).tobytes().decode()
 
-            for i in range(len(counts)):
-                x = int(counts[i])
-
-                # Apply delta encoding for all counts after the second entry
-                if i > 2:
-                    x -= int(counts[i - 2])
-
-                # Variable-length encode the value
-                while True:
-                    c = x & 0x1F  # Take 5 bits
-                    x >>= 5
-
-                    # If the sign bit (0x10) is set, continue if x != -1;
-                    # otherwise, continue if x != 0
-                    more = (x != -1) if (c & 0x10) else (x != 0)
-                    if more:
-                        c |= 0x20  # Set continuation bit
-                    c += 48  # Shift to ASCII
-                    result.append(chr(c))
-                    if not more:
-                        break
-
-            return "".join(result)
-
-        def multi_encode(pixels: torch.Tensor) -> list[int]:
+        def multi_encode(pixels: torch.Tensor) -> list[list[int]]:
             """Convert multiple binary masks using Run-Length Encoding (RLE).
 
             Args:
@@ -401,23 +387,30 @@ class SegmentationValidator(DetectionValidator):
             Returns:
                 (list[list[int]]): A list of RLE counts for each mask.
             """
+            num_masks, width = pixels.shape
             transitions = pixels[:, 1:] != pixels[:, :-1]
             row_idx, col_idx = torch.where(transitions)
-            col_idx = col_idx + 1
+            n = len(row_idx)
+            # Pack each (mask, position) pair into one integer for a compact, single device-to-host transfer.
+            row_idx.mul_(width).add_(col_idx).add_(1)
+            del col_idx
+            packed = torch.cat((row_idx, pixels[:, 0].to(row_idx.dtype))).cpu().numpy()
+            positions, starts = np.split(packed, (n,))
+            boundaries = np.searchsorted(positions, np.arange(num_masks + 1) * width)
 
             # Compute run lengths
             counts = []
-            for i in range(pixels.shape[0]):
-                positions = col_idx[row_idx == i]
-                if len(positions):
-                    count = torch.diff(positions).tolist()
-                    count.insert(0, positions[0].item())
-                    count.append(len(pixels[i]) - positions[-1].item())
+            for i in range(num_masks):
+                mask_positions = positions[boundaries[i] : boundaries[i + 1]] - i * width
+                if mask_positions.size:
+                    count = np.diff(mask_positions).tolist()
+                    count.insert(0, mask_positions[0])
+                    count.append(width - mask_positions[-1])
                 else:
-                    count = [len(pixels[i])]
+                    count = [width]
 
                 # Ensure starting with background (0) count
-                if pixels[i][0].item() == 1:
+                if starts[i] == 1:
                     count = [0, *count]
                 counts.append(count)
 
@@ -434,7 +427,7 @@ class SegmentationValidator(DetectionValidator):
             self.jdict[-len(rles) + i]["segmentation"] = r  # segmentation
 
     def scale_preds(self, predn: dict[str, torch.Tensor], pbatch: dict[str, Any]) -> dict[str, torch.Tensor]:
-        """Scales predictions to the original image size."""
+        """Scale predictions to the original image size."""
         return {
             **super().scale_preds(predn, pbatch),
             "masks": ops.scale_masks(predn["masks"][None], pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"])[

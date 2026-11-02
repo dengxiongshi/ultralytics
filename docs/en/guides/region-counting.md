@@ -7,7 +7,7 @@ keywords: region counting, zone counting, object counting in regions, RegionCoun
 
 # Object Counting in Regions with Ultralytics YOLO26
 
-The [RegionCounter solution](../reference/solutions/region_counter.md) in [Ultralytics YOLO26](../models/yolo26.md) tracks objects across video frames and, on every frame, counts the objects whose bounding-box center falls inside each region you define. Each region is drawn on the frame with its own live count, so you can monitor several zones, such as store aisles, road lanes, or production areas, with a single Python call or CLI command.
+The [RegionCounter solution](../reference/solutions/region_counter.md) in [Ultralytics YOLO26](../models/yolo26.md) tracks objects across video frames and, on every frame, counts the objects whose [bounding-box](https://www.ultralytics.com/glossary/bounding-box) center falls inside each region you define. Each region is drawn on the frame with its own live count, so you can monitor several zones, such as store aisles, road lanes, or production areas, with a single Python call or CLI command.
 
 <p align="center">
   <br>
@@ -26,12 +26,12 @@ The [RegionCounter solution](../reference/solutions/region_counter.md) in [Ultra
 - **Tracking built in:** The solution runs YOLO26 detection and [object tracking](../modes/track.md) internally, so there is no separate tracking pipeline to wire up.
 - **Counts you can read programmatically:** Every processed frame returns a results object with a dictionary of region counts, ready for dashboards, alerts, or logging.
 
-## Real World Applications
+## Real-World Applications
 
-|                                                                                                Retail                                                                                                 |                                                                                     Market Streets                                                                                      |
-| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| ![Ultralytics YOLO counting people inside drawn polygon regions in a retail store](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/people-counting-different-region-ultralytics-yolov8.avif) | ![Ultralytics YOLO region counts overlaid on a crowded market street](https://cdn.jsdelivr.net/gh/ultralytics/assets@main/docs/crowd-counting-different-region-ultralytics-yolov8.avif) |
-|                                                                              Ultralytics YOLO People Counting in Regions                                                                              |                                                                       Ultralytics YOLO Crowd Counting in Regions                                                                        |
+|                                                                     Retail                                                                     |                                                          Market Streets                                                           |
+| :--------------------------------------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------------------------: |
+| ![Ultralytics YOLO counting people inside drawn polygon regions in a retail store](https://cdn.ul.run/i/fe73398cea2c66ea7d666593160baef5.avif) | ![Ultralytics YOLO region counts overlaid on a crowded market street](https://cdn.ul.run/i/fb862e384539b1046f843a2d5691ad80.avif) |
+|                                                  Ultralytics YOLO People Counting in Regions                                                   |                                            Ultralytics YOLO Crowd Counting in Regions                                             |
 
 ## How to Count Objects in Regions with Ultralytics YOLO
 
@@ -106,17 +106,16 @@ Run the RegionCounter solution on a video source from the CLI or Python. A regio
 Here's a table with the `RegionCounter` arguments:
 
 {% from "macros/solutions-args.md" import param_table %}
-{{ param_table(["model", "region"]) }}
+{{ param_table(["model", "region", "line_width", "verbose"]) }}
 
 The `RegionCounter` solution enables the use of object tracking parameters:
 
-{% from "macros/track-args.md" import param_table %}
-{{ param_table(["tracker", "conf", "iou", "classes", "verbose", "device"]) }}
+{% include "macros/solutions-track-args.md" %}
 
 Additionally, the following visualization settings are supported:
 
 {% from "macros/visualization-args.md" import param_table %}
-{{ param_table(["show", "line_width", "show_conf", "show_labels"]) }}
+{{ param_table(["show", "show_conf", "show_labels"]) }}
 
 ## How Region Counting Works
 
