@@ -112,7 +112,10 @@ from ultralytics.utils.torch_utils import (
     time_sync,
 )
 
-from ultralytics.nn.modules import ShuffleNetV2, Conv_maxpool, GSConv, SimSPPF, A2C2f, MBConvBlock, stem, ADD, RIFusion
+from ultralytics.nn.modules import (
+    ShuffleNetV2, Conv_maxpool, GSConv, SimSPPF, MBConvBlock, stem, ADD, RIFusion,
+    ConvNormLayer, BasicBlock, BottleNeck, Blocks
+)
 from ultralytics.nn.backbone.fasternet import *
 
 
@@ -276,6 +279,10 @@ class BaseModel(torch.nn.Module):
                 if isinstance(m, RepVGGDW):
                     m.fuse()
                     m.forward = m.forward_fuse
+                if isinstance(m, ConvNormLayer):
+                    m.conv = fuse_conv_and_bn(m.conv, m.norm)  # update conv
+                    delattr(m, 'norm')  # remove batchnorm
+                    m.forward = m.forward_fuse  # update forward
                 if isinstance(m, Detect) and getattr(m, "end2end", False):
                     m.fuse()  # remove one2many head
             self.info(verbose=verbose)
@@ -2107,6 +2114,7 @@ def parse_model(d, ch, verbose=True):
             SCDown,
             C2fCIB,
             A2C2f,
+            ConvNormLayer,
             ShuffleNetV2,
             Conv_maxpool,
             stem,
@@ -2264,6 +2272,10 @@ def parse_model(d, ch, verbose=True):
         elif m in {fasternet_t0, fasternet_t1, fasternet_t2, fasternet_s, fasternet_m, fasternet_l}:
             m = m(*args)
             c2 = m.channel
+        elif m is Blocks:
+            block_type = globals()[args[1]]
+            c1, c2 = ch[f], args[0] * block_type.expansion
+            args = [c1, args[0], block_type, *args[2:]]
         else:
             c2 = ch[f]
 

@@ -27,7 +27,7 @@ from ultralytics.nn import DetectionModel, SegmentationModel
 from ultralytics.utils.torch_utils import profile_ops
 
 
-cfg = "/mnt/d/python_work/ultralytics/models/yolov8/segment/yolov8_shufflenetv2.yaml"
+cfg = r"G:\python_work\ultralytics\models\yolov8\segment\yolov8_shufflenetv2.yaml"
 batch_size = 1
 input = torch.randn((1, 3, 640, 640))
 device = "0"

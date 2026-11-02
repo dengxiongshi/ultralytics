@@ -110,6 +110,7 @@ from .transformer import (
 
 from .CoreV8.SPPF.SimSPPF import SimSPPF
 from .GSConv import GSConv
+from .Resnet import ConvNormLayer, BasicBlock, Blocks, BottleNeck
 from .ShuffleNet import ShuffleNetV2, Conv_maxpool
 from .EfficientNetLite import MBConvBlock, stem
 from .fusion import ADD, RIFusion
@@ -118,6 +119,10 @@ from .fusion import ADD, RIFusion
 __all__ = (
     "SimSPPF",
     "GSConv",
+    "ConvNormLayer",
+    "BasicBlock",
+    "Blocks",
+    "BottleNeck",
     "Conv_maxpool",
     "ShuffleNetV2",
     "stem",
