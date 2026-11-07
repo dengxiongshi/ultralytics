@@ -174,25 +174,7 @@ class ClassificationTrainer(BaseTrainer):
                 f"See https://docs.ultralytics.com/datasets/classify for cls dataset format."
             )
 
-        # Filter out samples with class indices >= nc (prevents CUDA assertion errors)
         drop_last = self.args.compile and mode == "train"
-        nc = self.data.get("nc", 0)
-        if not getattr(self.args, "multi_label", False) and hasattr(dataset, "base"):
-            dataset_nc = len(dataset.base.classes)
-            if nc and dataset_nc > nc:
-                extra_classes = dataset.base.classes[nc:]
-                original_count = len(dataset.samples)
-                dataset.samples = [s for s in dataset.samples if s[1] < nc]
-                skipped = original_count - len(dataset.samples)
-                LOGGER.warning(
-                    f"{mode} split has {dataset_nc} classes but model expects {nc}. "
-                    f"Skipping {skipped} samples from extra classes: {extra_classes}"
-                )
-                if not dataset.samples:
-                    raise RuntimeError(
-                        f"All {original_count} samples in '{mode}' split filtered out: every sample had class index >= "
-                        f"model nc={nc}. Reset the model's class count or align dataset class indices."
-                    )
         loader = build_dataloader(dataset, batch_size, self.args.workers, rank=rank, drop_last=drop_last, device=self.device)
         # Attach inference transforms
         if mode != "train":
@@ -231,11 +213,11 @@ class ClassificationTrainer(BaseTrainer):
             batch (dict[str, torch.Tensor]): Batch containing images and class labels.
             ni (int): Batch index used for naming the output file.
         """
-        plot_batch = {**batch}
-        plot_batch["batch_idx"] = torch.arange(batch["img"].shape[0])  #add batch index for plotting
-        if getattr(self.args, "multi_label", False) and batch["cls"].ndim == 2:
-            # Convert multi-hot (B, nc) to first active class index for plotting
-            plot_batch["cls"] = batch["cls"].argmax(dim=1)
+        plot_batch = {**batch}   # shallow copy so plot_images does not overwrite multi-hot 'cls' in place
+        plot_batch["batch_idx"] = torch.arange(batch["img"].shape[0])  # add batch index for plotting
+        # if getattr(self.args, "multi_label", False) and batch["cls"].ndim == 2:
+        #     # Convert multi-hot (B, nc) to first active class index for plotting
+        #     plot_batch["cls"] = batch["cls"].argmax(dim=1)
         plot_images(
             labels=plot_batch,
             fname=self.save_dir / f"train_batch{ni}.jpg",

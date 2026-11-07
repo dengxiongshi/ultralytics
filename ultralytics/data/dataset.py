@@ -1441,8 +1441,10 @@ class MultiLabelClassificationDataset:
         self.labels_file = str(labels_file)
         self.samples = self._parse_labels_csv(labels_file, root, nc)
 
-        if augment and args.fraction < 1.0:
-            self.samples = self.samples[: round(len(self.samples) * args.fraction)]
+        fraction = get_split_fraction(args.fraction, prefix or ("train" if augment else "val"))
+        count = fraction if isinstance(fraction, int) else max(int(fraction > 0), round(len(self.samples) * fraction))
+        if count < len(self.samples):
+            self.samples = [self.samples[i] for i in np.linspace(0, len(self.samples) - 1, count, dtype=int)]
 
         self.samples = self.verify_images()
         self.samples = [[x[0], x[1], Path(x[0]).with_suffix(".npy"), None] for x in self.samples]
@@ -1569,8 +1571,7 @@ class MultiLabelClassificationDataset:
             nf, nc, msgs, samples, x = 0, 0, [], [], {}
             with ThreadPool(NUM_THREADS) as pool:
                 # Wrap samples as ((file, cls_indices), prefix) for verify_image compatibility
-                verify_args = [((s[0], s[1]), self.prefix) for s in self.samples]
-                results = pool.imap(func=self._verify_single_image, iterable=verify_args)
+                results = pool.imap(func=verify_image, iterable=zip(self.samples, repeat(self.prefix)))
                 pbar = TQDM(results, desc=desc, total=len(self.samples))
                 for sample, nf_f, nc_f, msg in pbar:
                     if nf_f:

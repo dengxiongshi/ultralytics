@@ -256,8 +256,8 @@ class Results(SimpleClass, DataExportMixin):
         obb: torch.Tensor | None = None,
         speed: dict[str, float] | None = None,
         semantic_mask: torch.Tensor | None = None,
-        multi_label: bool = False,
         depth: torch.Tensor | None = None,
+        multi_label: bool = False,
     ) -> None:
         """Initialize the Results class for storing and manipulating inference results.
 
@@ -272,9 +272,9 @@ class Results(SimpleClass, DataExportMixin):
                 3).
             obb (torch.Tensor | None): A 2D tensor of oriented bounding box coordinates for each detection.
             speed (dict | None): A dictionary containing preprocess, inference, and postprocess speeds (ms/image).
-            multi_label (bool): Whether this is a multi-label classification result (sigmoid instead of softmax).
             semantic_mask (torch.Tensor | None): A 2D tensor of class IDs for semantic segmentation results.
             depth (torch.Tensor | None): A 2D float tensor of per-pixel depth values (H, W).
+            multi_label (bool): Whether this is a multi-label classification result (sigmoid instead of softmax).
 
         Notes:
             For the default pose model, keypoint indices for human body pose estimation are:
@@ -483,7 +483,7 @@ class Results(SimpleClass, DataExportMixin):
             >>> results = model("path/to/image.jpg")
             >>> new_result = results[0].new()
         """
-        result = Results(orig_img=self.orig_img, path=self.path, names=self.names, speed=self.speed)
+        result = Results(orig_img=self.orig_img, path=self.path, names=self.names, speed=self.speed, multi_label=self.multi_label)
         result.save_dir = self.save_dir
         return result
 
